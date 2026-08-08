@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "issue-tracker": {
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server-issues"],
+      "env": { "TRACKER_TOKEN": "***" }
+    },
+    "postgres": {
+      "type": "http",
+      "url": "http://127.0.0.1:8931/mcp"
+    }
+  }
+}

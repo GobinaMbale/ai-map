@@ -1,0 +1,12 @@
+---
+description: Conventions des handlers d'API
+globs: ["src/api/**/*.ts"]
+alwaysApply: false
+---
+
+# Style des handlers d'API
+
+Chaque handler valide son entrée avant tout accès base.
+
+Les erreurs remontées au client suivent le format défini dans
+`src/auth/session.ts` pour tout ce qui touche à la session.

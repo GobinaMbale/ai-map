@@ -1,0 +1,6 @@
+# Règles historiques (fichier hérité)
+
+Ce fichier coexiste avec `.cursor/rules/` — c'est exactement le genre de doublon
+de configuration qu'AI-MAP signale.
+
+Toujours écrire les messages d'erreur en français.

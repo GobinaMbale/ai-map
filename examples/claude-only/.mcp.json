@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "issue-tracker": {
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server-issues"],
+      "env": { "TRACKER_TOKEN": "***" }
+    }
+  }
+}

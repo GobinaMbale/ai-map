@@ -1,0 +1,116 @@
+{
+  "name": "ai-map-vscode",
+  "displayName": "AI-MAP",
+  "description": "Cartographie l'écosystème IA du workspace (Claude Code, OpenSpec, Cursor, Copilot, Roo, Windsurf, MCP) : fil d'impact, gouvernance, graphe transverse, liens vers le code source. Zéro dépendance, zéro réseau.",
+  "version": "0.2.0",
+  "publisher": "gobinadaniel",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#171A21",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GobinaMbale/ai-map.git",
+    "directory": "vscode-extension"
+  },
+  "homepage": "https://github.com/GobinaMbale/ai-map#readme",
+  "bugs": {
+    "url": "https://github.com/GobinaMbale/ai-map/issues"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "claude-code",
+    "openspec",
+    "mcp",
+    "governance"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "workspaceContains:**/.claude",
+    "workspaceContains:**/CLAUDE.md",
+    "workspaceContains:**/openspec"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiMap.generate",
+        "title": "Générer la carte",
+        "category": "AI-MAP",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "aiMap.openInBrowser",
+        "title": "Ouvrir la carte dans le navigateur",
+        "category": "AI-MAP",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "aiMap.saveReport",
+        "title": "Enregistrer le rapport HTML…",
+        "category": "AI-MAP",
+        "icon": "$(save)"
+      },
+      {
+        "command": "aiMap.refresh",
+        "title": "Rafraîchir",
+        "category": "AI-MAP",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiMap",
+          "title": "AI-MAP",
+          "icon": "media/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "aiMap": [
+        {
+          "id": "aiMapView",
+          "name": "Écosystèmes IA",
+          "icon": "media/sidebar.svg",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiMap.generate",
+          "when": "view == aiMapView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aiMap.openInBrowser",
+          "when": "view == aiMapView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aiMap.refresh",
+          "when": "view == aiMapView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "aiMap.saveReport",
+          "when": "view == aiMapView",
+          "group": "1_actions"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "ai-map",
+  "version": "0.1.0",
+  "description": "Carte HTML autoportante de l'écosystème IA d'un projet : Claude Code, OpenSpec, MCP — modèle universel, graphe transverse, analyse d'impact. Zéro dépendance, zéro réseau.",
+  "type": "module",
+  "bin": {
+    "ai-map": "bin/ai-map.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs",
+    "dev": "node src/ai-map.mjs . --open",
+    "start": "node bin/ai-map.mjs . --open",
+    "map": "node bin/ai-map.mjs .",
+    "test": "node test/smoke.mjs && node test/view.mjs",
+    "demo": "node src/ai-map.mjs examples/demo-project --open",
+    "icon": "node scripts/make-icon.mjs"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "ai",
+    "claude-code",
+    "openspec",
+    "mcp",
+    "governance",
+    "visualization",
+    "documentation",
+    "agents"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GobinaMbale/ai-map.git"
+  },
+  "homepage": "https://github.com/GobinaMbale/ai-map#readme",
+  "bugs": {
+    "url": "https://github.com/GobinaMbale/ai-map/issues"
+  },
+  "dependencies": {}
+}

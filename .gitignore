@@ -1,0 +1,5 @@
+node_modules/
+*.vsix
+ai-map.report.html
+ai-map.report.json
+.DS_Store

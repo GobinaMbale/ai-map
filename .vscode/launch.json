@@ -1,0 +1,28 @@
+{
+  // Même chose que vscode-extension/.vscode/launch.json, mais utilisable en
+  // ayant ouvert la RACINE du projet ai-map/ — le cas le plus naturel quand on
+  // développe le moteur et l'extension en même temps.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Extension : exemple multi-tool (6 écosystèmes)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
+        "${workspaceFolder}/examples/multi-tool"
+      ],
+      "outFiles": []
+    },
+    {
+      "name": "Extension : exemple demo-project (Claude + OpenSpec)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
+        "${workspaceFolder}/examples/demo-project"
+      ],
+      "outFiles": []
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Icône de barre d'activité VS Code : rendue en 24 px et monochrome.
+       Volontairement pauvre en détails et à traits épais — un motif fin devient
+       une tache illisible à cette taille. -->
+  <g stroke="currentColor" stroke-width="2.1" stroke-linecap="round" fill="none">
+    <path d="M6.5 7.5 11.5 17"/>
+    <path d="M17.5 8.5 11.5 17"/>
+    <path d="M6.5 7.5 17.5 8.5"/>
+  </g>
+  <g fill="currentColor">
+    <circle cx="6.5" cy="7.5" r="3.3"/>
+    <circle cx="17.5" cy="8.5" r="2.8"/>
+    <circle cx="11.5" cy="17" r="3.8"/>
+  </g>
+</svg>

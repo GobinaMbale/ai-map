@@ -1,0 +1,35 @@
+{
+  // F5 depuis ce dossier ouvre une fenêtre « Extension Development Host » avec
+  // l'extension chargée, déjà positionnée sur un projet d'exemple — sinon la
+  // fenêtre s'ouvre sans dossier et l'extension n'a rien à analyser.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Extension : exemple multi-tool (6 écosystèmes)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/../examples/multi-tool"
+      ],
+      "outFiles": []
+    },
+    {
+      "name": "Extension : exemple demo-project (Claude + OpenSpec)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/../examples/demo-project"
+      ],
+      "outFiles": []
+    },
+    {
+      "name": "Extension : dossier vide (choisir le projet à la main)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": []
+    }
+  ]
+}

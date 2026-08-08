@@ -1,0 +1,9 @@
+mcpServers:
+  issue-tracker:
+    command: npx
+    args: [-y, "@example/mcp-server-issues"]
+    env:
+      TRACKER_TOKEN: "***"
+  metrics:
+    type: http
+    url: "http://127.0.0.1:9310/mcp"
