@@ -48,12 +48,23 @@ function markdown(src) {
   while (i < lines.length) {
     const line = lines[i];
 
-    if (/^```/.test(line)) {
+    // L'indentation est acceptée : une fence à l'intérieur d'une liste est
+    // décalée, et un ancrage strict la laissait passer en texte brut.
+    const fence = line.match(/^([ \t]*)```\s*([\w+#.-]*)/);
+    if (fence) {
+      const pad = fence[1].length;
+      const lang = fence[2] || '';
       const buf = [];
       i++;
-      while (i < lines.length && !/^```/.test(lines[i])) { buf.push(esc(lines[i])); i++; }
+      while (i < lines.length && !/^[ \t]*```/.test(lines[i])) {
+        const raw = lines[i];
+        buf.push(esc(raw.slice(0, pad).trim() === '' ? raw.slice(pad) : raw));
+        i++;
+      }
       i++;
-      out.push('<pre><code>' + buf.join('\n') + '</code></pre>');
+      out.push('<div class="codeblock"><div class="cb-head">' +
+        `<span class="cb-lang">${esc(lang || 'texte')}</span></div>` +
+        '<pre><code>' + buf.join('\n') + '</code></pre></div>');
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
@@ -83,7 +94,9 @@ function markdown(src) {
       continue;
     }
     if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line);
+      // Une liste numérotée interrompue par un paragraphe repartait à 1 :
+      // on reprend le numéro réellement écrit dans la source.
+      const ordered = line.match(/^\s*(\d+)\.\s+/);
       const items = [];
       while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
         let text = lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '');
@@ -97,7 +110,8 @@ function markdown(src) {
         }
         i++;
       }
-      out.push((ordered ? '<ol>' : '<ul>') + items.join('') + (ordered ? '</ol>' : '</ul>'));
+      const open = ordered ? '<ol start="' + Number(ordered[1]) + '">' : '<ul>';
+      out.push(open + items.join('') + (ordered ? '</ol>' : '</ul>'));
       continue;
     }
     if (/^\s*$/.test(line)) { i++; continue; }

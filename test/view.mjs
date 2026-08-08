@@ -124,6 +124,28 @@ check('bouton d\'ouverture du fichier', /data-cmd="open"/.test(page));
 check('les relations sont libellées par leur verbe', /class="rel-verb"/.test(page));
 check('les métadonnées sont tabulées', /class="meta"/.test(page));
 
+// Régression : une fence INDENTÉE (à l'intérieur d'une liste) était laissée en
+// texte brut, délimiteurs visibles — et la numérotation repartait à 1.
+{
+  const nested = detail.render({
+    ...skill,
+    content: [
+      'Étapes', '',
+      '1. Première étape', '',
+      '   ```bash',
+      '   openspec status --change "<name>" --json',
+      '   ```', '',
+      '2. Seconde étape',
+    ].join('\n'),
+  }, model);
+  check('une fence indentée produit un bloc de code', /class="codeblock"/.test(nested));
+  check('la langue du bloc est restituée', /cb-lang">bash</.test(nested));
+  check('aucun délimiteur ne subsiste en texte', !nested.includes('```'));
+  check('la commande est dans le bloc, désindentée',
+    /<code>openspec status/.test(nested), nested.slice(nested.indexOf('<code>'), 120));
+  check('la liste reprend au bon numéro', /<ol start="2">/.test(nested));
+}
+
 const md = detail.render({
   ...skill,
   content: '## Titre\n\n- [x] fait\n- [ ] à faire\n\n`code` et **gras**\n\n<script>alert(3)</script>',

@@ -103,6 +103,12 @@
     if(state.detail && byId[state.detail]){ c.appendChild(buildDetailPage(byId[state.detail])); return; }
 
     if(state.tab==='overview'){
+      // Deux colonnes en tête : le score en grand à gauche, ce qui cloche à
+      // droite. C'est la seule chose qu'on doit voir sans faire défiler.
+      var top = el('div','dash-top');
+      top.appendChild(buildScoreHero());
+      top.appendChild(buildAlertsSummary());
+      c.appendChild(top);
       c.appendChild(buildKpis());
       c.appendChild(buildKindTiles());
       c.appendChild(buildSourcesPanel());
@@ -166,8 +172,7 @@
     var cross = (DATA.graph.edges||[]).filter(function(e){ return e.cross; }).length;
     var alerts = governanceAlerts().length;
 
-    band.appendChild(cell('Score de maturité IA', mat ? mat.score : '—',
-      mat ? '/100' : '', mat ? scoreColor(mat.score) : null));
+    band.appendChild(cell('Types recensés', DATA.totals.kinds, 'catégories'));
     band.appendChild(cell('Entités cartographiées', DATA.totals.entities,
       DATA.totals.sources + ' écosystèmes'));
     band.appendChild(cell('Liens transverses tracés', cross,
@@ -512,6 +517,43 @@
               .sort(function(a,b){ return b.points - a.points; });
   }
 
+  // Score en grand, avec ses composantes sous forme de barres. C'est le chiffre
+  // qu'on retient ; il doit être lisible de loin.
+  function buildScoreHero(){
+    var m = maturity();
+    var p = el('div','panel score-hero');
+    p.appendChild(el('div','sh-label','AI Maturity Score'));
+    if(!m){ p.appendChild(el('div','empty','Pas assez de données.')); return p; }
+
+    var big = el('div','sh-big');
+    var n = el('span','sh-n', String(m.score));
+    n.style.color = scoreColor(m.score);
+    big.appendChild(n);
+    big.appendChild(el('span','sh-max','/100'));
+    p.appendChild(big);
+
+    var parts = el('div','sh-parts');
+    m.parts.forEach(function(part){
+      var row = el('div','sh-part');
+      var top = el('div','sp-top');
+      top.appendChild(el('span','sp-label', part.label));
+      var pct = el('span','sp-pct', Math.round(part.value*100)+'%');
+      pct.style.color = scoreColor(part.value*100);
+      top.appendChild(pct);
+      row.appendChild(top);
+      var track = el('div','sp-track');
+      var fill = el('div','sp-fill');
+      fill.style.width=(part.value*100)+'%';
+      fill.style.background=scoreColor(part.value*100);
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el('div','sp-desc', part.desc));
+      parts.appendChild(row);
+    });
+    p.appendChild(parts);
+    return p;
+  }
+
   function buildScorePanel(){
     var m = maturity();
     var p = el('div','panel');
@@ -631,34 +673,113 @@
     return out;
   }
 
-  function buildAlertsPanel(){
-    var alerts = governanceAlerts();
-    var p = el('div','panel');
-    p.appendChild(h2('⚠️ Alertes de gouvernance'+(alerts.length?' ('+alerts.length+')':'')));
+  var ALERT_ORDER = { danger:0, warn:1, info:2 };
+  function sortedAlerts(){
+    return governanceAlerts().sort(function(a,b){
+      return (ALERT_ORDER[a.badge.tone]||9)-(ALERT_ORDER[b.badge.tone]||9);
+    });
+  }
+
+  // Explication de l'alerte : le badge dit CE QUE c'est, ceci dit POURQUOI.
+  function alertWhy(a){
+    var t = a.badge.text;
+    if(/archiver/i.test(t)) return 'Toutes les tâches sont complètes — ce change devrait être archivé.';
+    if(/jamais référencé/i.test(t)) return 'Rien ne le cite et il ne touche aucun code : candidat à la suppression.';
+    if(/aussi déclaré/i.test(t)) return 'Le même serveur est déclaré ailleurs : les deux copies vont diverger.';
+    if(/hérité/i.test(t)) return 'Ce format est remplacé par le format moderne, présent dans le même projet.';
+    if(/illisible|invalide|non reconnu/i.test(t)) return 'Le fichier existe mais n\'a pas pu être analysé.';
+    return a.badge.text;
+  }
+
+  // Fiche d'alerte : icône, nom, badges, motif coloré, explication, chemin,
+  // actions à droite. Compacte, elle sert de résumé sur la vue d'ensemble.
+  function alertCard(a, compact){
+    var k = kindOf(a.entity.kind), s = srcOf(a.entity.source);
+    var card = el('div','acard '+a.badge.tone+(compact?' compact':''));
+
+    var icon = el('span','ac-icon', a.badge.tone==='danger'?'⛔':(a.badge.tone==='warn'?'⚠':'ⓘ'));
+    card.appendChild(icon);
+
+    var body = el('div','ac-body');
+    var head = el('div','ac-head');
+    head.appendChild(el('span','ac-name', a.entity.name));
+    var kb = el('span','ac-badge'); kb.textContent=k.one;
+    kb.style.background=k.color+'22'; kb.style.color=k.color; kb.style.borderColor=k.color+'55';
+    head.appendChild(kb);
+    var sb = el('span','ac-badge'); sb.textContent=s.label;
+    sb.style.background=s.color+'22'; sb.style.color=s.color; sb.style.borderColor=s.color+'55';
+    head.appendChild(sb);
+    body.appendChild(head);
+
+    body.appendChild(el('div','ac-reason', a.badge.text));
+    if(!compact){
+      body.appendChild(el('div','ac-why', alertWhy(a)));
+      if(a.entity.path) body.appendChild(el('div','ac-path', a.entity.path));
+    }
+    card.appendChild(body);
+
+    if(!compact){
+      var acts = el('div','ac-acts');
+      var open = el('button','btn ac-btn','Voir la fiche');
+      open.onclick=function(ev){ ev.stopPropagation(); openDetail(a.entity); };
+      acts.appendChild(open);
+      if(a.entity.path){
+        // Le rapport est une page hors ligne : il ne peut pas archiver ni
+        // modifier quoi que ce soit. Copier le chemin est l'action honnête.
+        var cp = el('button','btn ac-btn ghost','Copier le chemin');
+        cp.onclick=function(ev){
+          ev.stopPropagation(); copyText(a.entity.path);
+          cp.textContent='Copié'; setTimeout(function(){ cp.textContent='Copier le chemin'; },1600);
+        };
+        acts.appendChild(cp);
+      }
+      card.appendChild(acts);
+    }
+
+    card.onclick=function(){ openDetail(a.entity); };
+    return card;
+  }
+
+  // Résumé pour la vue d'ensemble : les trois plus graves, puis un renvoi.
+  function buildAlertsSummary(){
+    var alerts = sortedAlerts();
+    var p = el('div','panel alerts-panel');
+    var head = el('div','ap-head');
+    head.appendChild(el('span','ap-title','Alertes de gouvernance'));
+    if(alerts.length) head.appendChild(el('span','ap-count', String(alerts.length)));
+    p.appendChild(head);
+
     if(!alerts.length){
       p.appendChild(el('div','ok-note','✔ Aucune alerte : rien d\'orphelin, de dupliqué ni d\'illisible.'));
       return p;
     }
-    var order = { danger:0, warn:1, info:2 };
-    alerts.sort(function(a,b){ return (order[a.badge.tone]||9)-(order[b.badge.tone]||9); });
+    var list = el('div','acards');
+    alerts.slice(0,3).forEach(function(a){ list.appendChild(alertCard(a, true)); });
+    p.appendChild(list);
 
-    var list = el('div','alerts');
-    alerts.slice(0,20).forEach(function(a){
-      var k = kindOf(a.entity.kind), s = srcOf(a.entity.source);
-      var row = el('div','alert '+a.badge.tone);
-      row.appendChild(el('span','a-tone', a.badge.tone==='danger'?'✖':(a.badge.tone==='warn'?'▲':'○')));
-      var body = el('div','a-body');
-      var t = el('div','a-title');
-      t.appendChild(document.createTextNode(a.entity.name));
-      var sp = el('span','srcpill', s.icon+' '+s.label); sp.style.background=s.color;
-      t.appendChild(sp);
-      body.appendChild(t);
-      body.appendChild(el('div','a-msg', k.one+' — '+a.badge.text));
-      row.appendChild(body);
-      row.onclick=function(){ openDetail(a.entity); };
-      list.appendChild(row);
-    });
-    if(alerts.length>20) list.appendChild(el('div','tl-more','+ '+(alerts.length-20)+' autre(s)'));
+    var more = el('button','btn ap-more', alerts.length>3
+      ? 'Voir les ' + alerts.length + ' alertes  ›' : 'Ouvrir la gouvernance  ›');
+    more.onclick=function(){ state.tab='governance'; render(); };
+    p.appendChild(more);
+    return p;
+  }
+
+  // Vue complète, dans l'onglet Gouvernance.
+  function buildAlertsPanel(){
+    var alerts = sortedAlerts();
+    var p = el('div','panel');
+    var head = el('div','ap-head');
+    head.appendChild(el('span','ap-title','Alertes actives'));
+    if(alerts.length) head.appendChild(el('span','ap-count', String(alerts.length)));
+    p.appendChild(head);
+
+    if(!alerts.length){
+      p.appendChild(el('div','ok-note','✔ Aucune alerte : rien d\'orphelin, de dupliqué ni d\'illisible.'));
+      return p;
+    }
+    var list = el('div','acards');
+    alerts.slice(0,30).forEach(function(a){ list.appendChild(alertCard(a, false)); });
+    if(alerts.length>30) list.appendChild(el('div','tl-more','+ '+(alerts.length-30)+' autre(s)'));
     p.appendChild(list);
     return p;
   }
@@ -1047,8 +1168,8 @@
   function relationsOf(id){
     var out = { out:[], in:[] };
     (DATA.graph.edges||[]).forEach(function(ed){
-      if(ed.s===id) out.out.push({ id:ed.t, type:ed.type });
-      else if(ed.t===id) out.in.push({ id:ed.s, type:ed.type });
+      if(ed.s===id) out.out.push({ id:ed.t, type:ed.type, cross:ed.cross });
+      else if(ed.t===id) out.in.push({ id:ed.s, type:ed.type, cross:ed.cross });
     });
     return out;
   }
@@ -1123,7 +1244,11 @@
     page.appendChild(nav);
 
     panes.content = el('div','dpane md');
+    // Les titres de section prennent la couleur du type de l'entité : la fiche
+    // se lit alors comme une page à elle, pas comme un bloc de texte neutre.
+    panes.content.style.setProperty('--tone', k.color);
     panes.content.innerHTML = renderMarkdown(e.content || '_Aucun contenu textuel._');
+    wireCopyButtons(panes.content);
     page.appendChild(panes.content);
 
     panes.relations = el('div','dpane hidden');
@@ -1149,20 +1274,64 @@
     return page;
   }
 
+  // Relations groupées PAR VERBE plutôt qu'en liste plate : « touche 3 fichiers,
+  // utilise 2 outils, cité par 1 exigence » se lit ; vingt puces alignées non.
   function relList(title, list){
-    var box = el('div');
-    box.appendChild(el('h4',null,title));
-    list.forEach(function(r){
-      var m = edgeMeta(r.type);
-      var b = el('span','rlink');
-      var dot = el('span','dot'); dot.style.background=m.color;
-      b.appendChild(dot);
-      b.appendChild(document.createTextNode(m.verb+' · '+nodeLabel(r.id)));
-      if(byId[r.id]) b.onclick=function(){ openDetail(byId[r.id]); };
-      else b.style.cursor='default';
-      box.appendChild(b);
+    var box = el('div','relgroup');
+    var head = el('div','rg-head');
+    head.appendChild(el('span','rg-title', title));
+    head.appendChild(el('span','rg-count', String(list.length)));
+    box.appendChild(head);
+
+    var byType = {};
+    list.forEach(function(r){ (byType[r.type] = byType[r.type] || []).push(r); });
+
+    (DATA.graph.edgeTypes||[]).forEach(function(t){
+      var group = byType[t.type];
+      if(!group) return;
+      var sec = el('div','rg-sec');
+      var lab = el('div','rg-verb');
+      var sw = el('span','eline');
+      sw.style.borderTop=(t.dashed?'2px dashed ':'2px solid ')+t.color;
+      lab.appendChild(sw);
+      var vb = el('span','rg-vname', title.indexOf('Vers') === 0 ? t.verb+' par' : t.verb);
+      vb.style.color = t.color;
+      lab.appendChild(vb);
+      lab.appendChild(el('span','rg-count', String(group.length)));
+      sec.appendChild(lab);
+
+      var items = el('div','rg-items');
+      group.forEach(function(r){
+        var target = byId[r.id];
+        var kind = target ? target.kind : nodeKind(r.id);
+        var k = kindOf(kind);
+        var b = el('div','rlink');
+        b.style.borderLeftColor = k.color;
+        var ic = el('span','rl-ic', k.icon); ic.title = k.one;
+        b.appendChild(ic);
+        b.appendChild(el('span','rl-name', nodeLabel(r.id)));
+        var path = target ? target.path : nodePath(r.id);
+        if(path) b.appendChild(el('span','rl-path', path));
+        if(r.cross) b.appendChild(el('span','rl-cross','transverse'));
+        if(target) b.onclick=function(){ openDetail(target); };
+        else b.classList.add('inert');
+        items.appendChild(b);
+      });
+      sec.appendChild(items);
+      box.appendChild(sec);
     });
     return box;
+  }
+
+  function nodeKind(id){
+    var g = DATA.graph.nodes||[];
+    for(var i=0;i<g.length;i++){ if(g[i].id===id) return g[i].kind; }
+    return 'document';
+  }
+  function nodePath(id){
+    var g = DATA.graph.nodes||[];
+    for(var i=0;i<g.length;i++){ if(g[i].id===id) return g[i].path||''; }
+    return '';
   }
 
   // Échap ferme la fiche, comme le faisait la modale.
@@ -1236,11 +1405,27 @@
     }
     while(i<lines.length){
       var line=lines[i];
-      if(/^```/.test(line)){
+      // L'INDENTATION est acceptée : à l'intérieur d'une liste, une fence est
+      // décalée. Ancrée strictement en début de ligne, elle passait en texte
+      // brut — délimiteurs visibles et code non mis en forme.
+      var fence = line.match(/^([ \t]*)```\s*([\w+#.-]*)/);
+      if(fence){
+        var pad = fence[1].length;
+        var lang = fence[2] || '';
         var buf=[]; i++;
-        while(i<lines.length && !/^```/.test(lines[i])){ buf.push(esc(lines[i])); i++; }
+        while(i<lines.length && !/^[ \t]*```/.test(lines[i])){
+          // On ne retire que l'indentation de la fence : le décalage interne
+          // au code doit être conservé tel quel.
+          var raw = lines[i];
+          buf.push(esc(raw.slice(0,pad).trim() === '' ? raw.slice(pad) : raw));
+          i++;
+        }
         i++;
-        out.push('<pre><code>'+buf.join('\n')+'</code></pre>'); continue;
+        out.push('<div class="codeblock">'
+          + '<div class="cb-head"><span class="cb-lang">' + esc(lang || 'texte') + '</span>'
+          + '<button class="cb-copy" type="button">Copier</button></div>'
+          + '<pre><code>' + buf.join('\n') + '</code></pre></div>');
+        continue;
       }
       var h=line.match(/^(#{1,6})\s+(.*)$/);
       if(h){ var lvl=Math.min(h[1].length,3); out.push('<h'+lvl+'>'+inline(h[2])+'</h'+lvl+'>'); i++; continue; }
@@ -1257,22 +1442,66 @@
         out.push('<table><thead>'+th+'</thead><tbody>'+tb+'</tbody></table>'); continue;
       }
       if(/^\s*([-*+]|\d+\.)\s+/.test(line)){
-        var ordered=/^\s*\d+\.\s+/.test(line); var items=[];
+        var ord = line.match(/^\s*(\d+)\.\s+/);
+        var items=[];
         while(i<lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])){
-          items.push('<li>'+inline(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/,''))+'</li>'); i++;
+          var li = '<li>'+inline(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/,''))+'</li>';
+          // Case à cocher : rendue comme telle, pas comme « [x] » littéral.
+          li = li.replace(/^<li>\[([ xX])\]\s+/, function(m,c){
+            return '<li class="task'+(c.toLowerCase()==='x'?' done':'')+'">'
+              + (c.toLowerCase()==='x'?'☑ ':'☐ ');
+          });
+          items.push(li); i++;
         }
-        out.push((ordered?'<ol>':'<ul>')+items.join('')+(ordered?'</ol>':'</ul>')); continue;
+        // Une liste numérotée interrompue par un paragraphe repartait à 1 :
+        // on repart du numéro réellement écrit dans la source.
+        var open = ord ? '<ol start="'+Number(ord[1])+'">' : '<ul>';
+        out.push(open+items.join('')+(ord?'</ol>':'</ul>')); continue;
       }
       if(/^\s*$/.test(line)){ i++; continue; }
       var para=[inline(line)]; i++;
       while(i<lines.length && !/^\s*$/.test(lines[i]) &&
-            !/^(#{1,6}\s|>\s?|```|\s*([-*+]|\d+\.)\s|\|)/.test(lines[i]) &&
+            !/^\s*(#{1,6}\s|>\s?|```|([-*+]|\d+\.)\s|\|)/.test(lines[i]) &&
             !/^(---|\*\*\*|___)\s*$/.test(lines[i])){ para.push(inline(lines[i])); i++; }
       out.push('<p>'+para.join('<br>')+'</p>');
     }
     return out.join('\n');
   }
   function splitRow(line){ return line.replace(/^\||\|\s*$/g,'').split('|').map(function(s){return s.trim();}); }
+
+  // Le Markdown est injecté via innerHTML : les boutons de copie n'ont donc pas
+  // de gestionnaire. On les câble après coup.
+  function wireCopyButtons(root){
+    if(!root.querySelectorAll) return;
+    root.querySelectorAll('.cb-copy').forEach(function(btn){
+      btn.onclick=function(){
+        var pre = btn.parentElement && btn.parentElement.nextElementSibling;
+        var text = pre ? pre.textContent : '';
+        copyText(text);
+        btn.textContent = 'Copié';
+        setTimeout(function(){ btn.textContent = 'Copier'; }, 1600);
+      };
+    });
+  }
+
+  // Le rapport s'ouvre souvent depuis un fichier local : l'API Presse-papiers
+  // peut y être refusée, d'où le repli sur une zone de texte temporaire.
+  function copyText(text){
+    try {
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text); return;
+      }
+    } catch(e){ /* on tente le repli */ }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch(e){ /* rien de mieux à faire hors ligne */ }
+  }
 
   // ------------------------------------------------------------------ graphe --
   // `showGeneric` et `showOrphans` sont FAUX par défaut : sur un projet réel,
@@ -1332,6 +1561,22 @@
       layout.appendChild(main);
       panel.appendChild(layout);
       return panel;
+    }
+
+    // Au-delà d'un certain volume, aucun réglage d'affichage ne sauve la
+    // lecture : il faut retirer une famille. On propose la plus nombreuse.
+    if(vis.nodes.length > 60){
+      var counts = {};
+      vis.nodes.forEach(function(n){ counts[n.kind]=(counts[n.kind]||0)+1; });
+      var big = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; })[0];
+      var bk = kindOf(big);
+      var tip = el('div','gtip');
+      tip.appendChild(document.createTextNode(
+        vis.nodes.length+' nœuds : au repos, seuls les plus reliés sont nommés — survolez pour lire un voisinage. '));
+      var act = el('button','gtip-act','Masquer « '+bk.label+' » ('+counts[big]+')');
+      act.onclick=function(){ gState.kinds[big]=false; renderTab(); };
+      tip.appendChild(act);
+      main.appendChild(tip);
     }
 
     var box = el('div','gcanvas');
@@ -1512,7 +1757,15 @@
       (neigh[e.t.id]=neigh[e.t.id]||{})[e.s.id]=1;
     });
 
+    // Degré de chaque nœud, puis marquage des « carrefours » : ce sont les
+    // seuls qu'on étiquette au repos sur un graphe dense.
+    nodes.forEach(function(n){ n.deg = Object.keys(neigh[n.id]||{}).length; n.hub=false; });
+    var HUB_MAX = 22;
+    nodes.slice().sort(function(a,b){ return b.deg-a.deg; })
+      .slice(0, HUB_MAX).forEach(function(n){ if(n.deg>0) n.hub=true; });
+
     var k = 0.55*Math.sqrt((W*H)/(N+1));
+    var GRAV = Math.min(0.14, 0.02 + N*0.0012);
     var hoverId=null, dragging=null, panning=false, panLast=null;
     var cam={scale:1,ox:0,oy:0};
 
@@ -1586,11 +1839,10 @@
       });
       nodes.forEach(function(n){
         if(n.fixed) return;
-        disp[n.id].x+=(W/2-n.x)*0.02; disp[n.id].y+=(H/2-n.y)*0.02;
+        disp[n.id].x+=(W/2-n.x)*GRAV; disp[n.id].y+=(H/2-n.y)*GRAV;
         var dd=disp[n.id], dl=Math.sqrt(dd.x*dd.x+dd.y*dd.y)||0.01;
         n.x+=(dd.x/dl)*Math.min(dl,temp); n.y+=(dd.y/dl)*Math.min(dl,temp);
       });
-      clampAll();
     }
     function settle(){ var t=W/8; for(var s=0;s<320;s++){ step(t); t=Math.max(0.5,t*0.97); } }
     function separate(){
@@ -1606,7 +1858,6 @@
             else { var sg2=(dy<0?-1:1),s2=oy/2; if(!a.fixed)a.y-=sg2*s2; if(!b.fixed)b.y+=sg2*s2; }
           }
         }
-        clampAll();
         if(!moved) break;
       }
     }
@@ -1642,15 +1893,23 @@
       ctx.setLineDash([]); ctx.globalAlpha=1;
       nodes.forEach(function(n){
         var dim=hoverId&&n.id!==hoverId&&!(neigh[hoverId]&&neigh[hoverId][n.id]);
-        var r=n.kind==='tool'?6:8;
+        // Le rayon suit le degré : les carrefours se voient sans les lire.
+        var r=(n.kind==='tool'?5:7) + Math.min(6, Math.sqrt(n.deg||0)*1.6);
         ctx.globalAlpha=dim?0.2:1;
         ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
         ctx.fillStyle=n.color; ctx.fill();
         ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.stroke();
-        if(N<=60||!dim){
-          ctx.font='11px system-ui,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+
+        // Sans survol, `dim` est faux partout : l'ancienne condition
+        // `N<=60 || !dim` étiquetait donc TOUT, quel que soit le nombre de
+        // nœuds — d'où l'empilement illisible. On n'étiquette au repos que les
+        // nœuds les plus reliés ; le survol révèle le voisinage.
+        var label = hoverId ? !dim : (N <= 45 || n.hub);
+        if(label){
+          ctx.font=(n.hub?'600 11.5px':'11px')+' system-ui,sans-serif';
+          ctx.textAlign='left'; ctx.textBaseline='middle';
           ctx.fillStyle=COL.ink; ctx.globalAlpha=dim?0.25:0.95;
-          ctx.fillText(clipTxt(n.label,24), n.x+r+4, n.y);
+          ctx.fillText(clipTxt(n.label,24), n.x+r+5, n.y);
         }
         ctx.globalAlpha=1;
       });
@@ -1764,8 +2023,7 @@
       var p=posOf(ev);
       if(dragging){
         var w=toWorld(p.x,p.y);
-        dragging.x=Math.max(halfX(dragging),Math.min(W-halfX(dragging),w.x));
-        dragging.y=Math.max(halfY(dragging),Math.min(H-halfY(dragging),w.y));
+        dragging.x=w.x; dragging.y=w.y;
         hoverId=dragging.id; draw(); showTip(dragging,ev); return;
       }
       if(panning){ cam.ox+=(ev.clientX-panLast.x); cam.oy+=(ev.clientY-panLast.y);

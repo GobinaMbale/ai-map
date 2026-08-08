@@ -359,7 +359,13 @@ function runReportInFakeDom(model) {
   function makeEl(tag) {
     const el = {
       tagName: String(tag).toUpperCase(),
-      children: [], style: {}, dataset: {},
+      children: [], dataset: {},
+      // Les variables CSS passent par setProperty : un objet nu ne suffit pas.
+      style: {
+        setProperty(k, v) { this[k] = v; },
+        getPropertyValue(k) { return this[k] || ''; },
+        removeProperty(k) { delete this[k]; },
+      },
       className: '', textContent: '', title: '', type: '', value: '',
       // `innerHTML = ''` est la façon dont le rapport vide un conteneur : sans
       // ce setter, les enfants s'accumuleraient et le parcours de test
