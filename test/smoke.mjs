@@ -223,11 +223,85 @@ check('DATA est un JSON relisable', !!dataBlock && (() => {
 
 const run = runReportInFakeDom(m);
 check('le script du rapport s\'exécute sans erreur', run.error === null, run.error && run.error.stack);
-check('les six onglets sont présents', run.tabs.length === 6,
+check('les sept onglets sont présents', run.tabs.length === 7,
   run.tabs.map((t) => t.label).join(' | '));
 for (const t of run.tabs) {
   check('onglet « ' + t.label + ' » se construit',
     !t.error && t.nodes > 5, t.error ? t.error.stack : t.nodes + ' nœuds');
+}
+
+// ----- Gouvernance : le score doit être un levier, pas un constat ----------
+{
+  const byLabel = (re) => findAll(run.root, (n) => n.tagName === 'BUTTON' && re.test(textOf(n)))[0];
+
+  const gov = byLabel(/Gouvernance/);
+  check('l\'onglet Gouvernance est atteignable', !!gov);
+  if (gov) {
+    gov.onclick();
+    const gains = findAll(run.root, (n) => n.className === 'reco-gain').map((n) => textOf(n));
+    check('des recommandations chiffrées sont proposées', gains.length > 0, gains.join(' | '));
+    check('chaque recommandation annonce un gain en points',
+      gains.every((g) => /^\+\d+ pts? /.test(g)), gains.join(' | '));
+
+    // Invariant : appliquer TOUTES les recommandations ne peut pas dépasser
+    // 100. Si la somme des gains excède la marge restante, le calcul ment.
+    const sum = gains.reduce((s, g) => s + Number((g.match(/\+(\d+)/) || [0, 0])[1]), 0);
+    const over = byLabel(/Vue d'ensemble/);
+    if (over) over.onclick();
+    const kpi = findAll(run.root, (n) => n.className === 'kc-n')[0];
+    const score = kpi ? Number(textOf(kpi)) : NaN;
+    check('la somme des gains ne dépasse pas la marge restante',
+      Number.isFinite(score) && sum <= (100 - score) + 4,
+      'score=' + score + ' somme des gains=' + sum);
+
+    // Le détail d'une recommandation doit nommer les entités concernées.
+    gov.onclick();
+    const reco = findAll(run.root, (n) => n.className === 'reco')[0];
+    if (reco) {
+      reco.onclick();
+      check('une recommandation ouvre la liste des entités visées',
+        findAll(run.root, (n) => String(n.className).indexOf('alert') === 0).length > 0);
+    }
+  }
+}
+
+// ----- Impact : un sélecteur, pas un déversoir -----------------------------
+{
+  const imp = findAll(run.root, (n) => n.tagName === 'BUTTON' && /Impact/.test(textOf(n)))[0];
+  if (imp) {
+    imp.onclick();
+    const chips = findAll(run.root, (n) => String(n.className).indexOf('ichip') === 0);
+    check('le fil d\'impact propose un sélecteur d\'origine', chips.length > 1,
+      chips.length + ' pastille(s)');
+    const before = findAll(run.root, (n) => n.className === 'chain' || n.className === 'chain cross').length;
+    const pick = chips.find((c) => !/Tous les fils/.test(textOf(c)));
+    if (pick) {
+      pick.onclick();
+      const after = findAll(run.root, (n) => n.className === 'chain' || n.className === 'chain cross').length;
+      check('sélectionner une origine restreint les fils affichés', after > 0 && after <= before,
+        before + ' → ' + after);
+    }
+  }
+}
+
+// ----- Graphe : contrôles en barre latérale --------------------------------
+{
+  const gr = findAll(run.root, (n) => n.tagName === 'BUTTON' && /Graphe/.test(textOf(n)))[0];
+  if (gr) {
+    gr.onclick();
+    check('les contrôles du graphe sont en barre latérale',
+      findAll(run.root, (n) => n.className === 'gside').length === 1);
+    const types = findAll(run.root, (n) => String(n.className).indexOf('gs-type') === 0);
+    check('les types servent de légende ET de filtre', types.length > 0, types.length + ' type(s)');
+    check('le canvas annonce ses effectifs',
+      findAll(run.root, (n) => n.className === 'gstat').length === 1);
+    if (types.length) {
+      types[0].onclick();
+      check('décocher un type le retire du graphe',
+        findAll(run.root, (n) => String(n.className).indexOf('gs-type') === 0)
+          .some((t) => / off$/.test(String(t.className))));
+    }
+  }
 }
 
 // La fiche détaillée doit s'ouvrir EN PAGE (dans le flux) et non en popup

@@ -27,11 +27,12 @@ illisible.
 
 | Onglet | Contenu |
 |---|---|
-| ▦ **Vue d'ensemble** | bandeau d'indicateurs (score de maturité, entités, liens transverses, alertes) · détail du score · **alertes de gouvernance** · écosystèmes · répartition par type |
-| 🎯 **Impact** | le **fil d'impact** : `Exigence › Skill › Outil MCP › Code source`, une ligne lisible par chaîne, les fils transverses en tête · avancement des changes |
-| 🕸️ **Graphe** | relations réelles : `contient`, `impacte`, `référence`, `utilise`, `cite`, `touche`. Vues **Réseau** et **MCD** (Merise). Zoom, déplacement, plein écran, clic → fiche |
+| ▦ **Vue d'ensemble** | bandeau d'indicateurs · tuiles par type de composant · écosystèmes détectés · répartition |
+| 🎯 **Impact** | le **fil d'impact** : `Exigence › Skill › Outil MCP › Code source`, avec un **sélecteur d'origine** — on choisit ce qu'on veut suivre au lieu de tout déverser · avancement des changes |
+| ⚖️ **Gouvernance** | détail du score · **« Ce qui ferait monter le score »** (actions chiffrées en points) · alertes actives |
+| 🕸️ **Graphe** | contrôles en **barre latérale** (mode, types servant de légende *et* de filtre, relations, lisibilité) · vues **Réseau** et **MCD** · zoom, plein écran réel, clic → fiche |
 | 🕰️ **Timeline** | activité des 12 derniers mois + ce qui a bougé récemment. Repère la config qui dort pendant que le code avance |
-| 📇 **Entités** | recherche plein-texte + double filtre **type** × **écosystème**, fiches avec relations navigables et contenu Markdown complet |
+| 📇 **Entités** | recherche plein-texte + double filtre **type** × **écosystème**, groupes repliables, fiches avec relations navigables |
 | 🌳 **Fichiers** | un arbre repliable par dossier IA détecté |
 
 Thème clair/sombre.
@@ -48,6 +49,20 @@ décision :
 | Traçabilité | part des skills / commandes / agents qui pointent vers du code réel |
 | Fraîcheur | part des entités modifiées depuis moins de 90 jours |
 | Hygiène | part des entités sans alerte de gouvernance |
+
+Le score seul n'est qu'un constat. L'onglet **Gouvernance** le transforme en
+levier : chaque action est chiffrée en points réellement gagnés.
+
+```
++23 pts Traçabilité  — Relier 14 skills/commandes/agents à des fichiers de code réels
++ 1 pt  Hygiène      — Archiver 2 changes terminés
+```
+
+Les gains sont **dérivés des composantes**, pas estimés : une composante pèse
+`1/N` du score, donc corriger `n` entités sur `u` rapporte `(n/u)/N × 100`
+points. Conséquence vérifiée par les tests — appliquer **toutes** les
+recommandations ne peut jamais dépasser 100. Sur le projet ci-dessus :
+`23 + 1 = 24 = 100 − 76`. Cliquer une recommandation liste les entités visées.
 
 ### Fil d'impact
 

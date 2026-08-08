@@ -98,6 +98,63 @@ header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-conte
 .a-title{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .a-msg{font-size:12.5px;color:var(--muted);margin-top:3px}
 
+/* Tuiles « composants IA détectés » */
+.sec-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted);margin:0 0 12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:0 0 24px}
+.tile{border:1px solid var(--border);border-radius:12px;padding:13px 15px;cursor:pointer;
+  transition:transform .12s ease}
+.tile:hover{transform:translateY(-2px)}
+.tile-head{font-size:11.5px;font-weight:700}
+.tile-n{font-size:26px;font-weight:800;line-height:1.1;margin-top:7px;letter-spacing:-.02em}
+.tile-src{font-size:10.5px;color:var(--muted);margin-top:5px}
+
+/* Recommandations chiffrées */
+.recos{display:flex;flex-direction:column;gap:6px}
+.reco{display:flex;align-items:center;gap:13px;padding:13px 15px;border-radius:11px;cursor:pointer;
+  background:var(--chip);border:1px solid transparent}
+.reco:hover{border-color:var(--accent)}
+.reco-arrow{color:var(--muted);font-size:15px;flex:0 0 auto}
+.reco-body{flex:1;min-width:0}
+.reco-label{font-size:13.5px;font-weight:600}
+.reco-why{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45}
+.reco-gain{flex:0 0 auto;font-size:11.5px;font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace;
+  padding:4px 11px;border-radius:999px;background:rgba(34,197,94,.16);color:#16a34a;white-space:nowrap}
+
+/* Sélecteur du fil d'impact */
+.isel{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 18px}
+.ichip{border:1px solid var(--border);background:var(--panel);border-radius:8px;padding:6px 9px 6px 12px;
+  font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;max-width:340px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ichip:hover{border-color:var(--accent)}
+.ichip.on{border-color:var(--accent);color:var(--accent);background:rgba(99,102,241,.1)}
+
+/* Graphe — contrôles en barre latérale */
+.graph-panel{padding:0;overflow:hidden}
+.glayout{display:flex;align-items:stretch;min-height:0}
+.gside{flex:0 0 208px;border-right:1px solid var(--border);padding:18px 16px;
+  background:var(--chip);display:flex;flex-direction:column;gap:7px;overflow:auto}
+.gs-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);margin:12px 0 3px}
+.gs-label:first-child{margin-top:0}
+.gs-seg{width:100%}
+.gs-seg button{flex:1;padding:6px 8px;font-size:12px}
+.gs-type{display:flex;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer;
+  border:1px solid var(--border);border-left:3px solid var(--border);border-radius:7px;
+  padding:6px 9px;font-family:inherit;font-size:12px;background:var(--panel);color:var(--ink)}
+.gs-type.off{opacity:.42}
+.gs-type:hover{border-color:var(--accent)}
+.gs-tname{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gs-tn{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.gs-edge{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;padding:3px 0}
+.gs-btn{margin-top:14px;width:100%}
+.gmain{flex:1;min-width:0;display:flex;flex-direction:column;padding:16px 18px}
+.gcanvas{position:relative;flex:1;min-height:0;display:flex}
+.gstat{position:absolute;top:10px;right:12px;font-size:11px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:3px 11px;
+  font-variant-numeric:tabular-nums;pointer-events:none}
+
 /* Fil d'impact */
 .chains{display:flex;flex-direction:column;gap:8px}
 .chain{padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--chip)}
@@ -277,19 +334,27 @@ canvas.graph{width:100%;display:block;cursor:grab;border-radius:12px;background:
 
 /* Plein écran — API Fullscreen : le panneau devient une colonne flex et le
    canvas absorbe toute la hauteur restante. */
-.panel:fullscreen{border-radius:0;border:0;margin:0;padding:16px 20px;
-  display:flex;flex-direction:column;background:var(--bg);max-width:none}
+.panel:fullscreen{border-radius:0;border:0;margin:0;padding:0;background:var(--bg);max-width:none;
+  display:flex;flex-direction:column}
+.panel:fullscreen .glayout{flex:1;min-height:0}
 .panel:fullscreen canvas.graph{flex:1 1 auto;min-height:0;height:auto}
-/* En plein écran, l'aide et la légende volent de la place au graphe. */
 .panel:fullscreen h2,.panel:fullscreen .hint{display:none}
-.panel:fullscreen .glegend{margin-bottom:6px}
-.panel:fullscreen .gctl,.panel:fullscreen .gtools{flex:0 0 auto}
 
 /* Repli si l'API Fullscreen est refusée : recouvrement de la fenêtre. */
 .panel.fullscreen:not(:fullscreen){position:fixed;inset:0;margin:0;z-index:60;border-radius:0;
-  display:flex;flex-direction:column;overflow:auto;max-width:none}
+  display:flex;flex-direction:column;max-width:none;padding:0}
+.panel.fullscreen:not(:fullscreen) .glayout{flex:1;min-height:0}
 .panel.fullscreen:not(:fullscreen) canvas.graph{flex:1 1 auto;min-height:320px;height:auto}
 .panel.fullscreen:not(:fullscreen) h2,.panel.fullscreen:not(:fullscreen) .hint{display:none}
+
+/* Sous 900px, la barre latérale passe au-dessus du graphe plutôt que de
+   l'écraser à quelques pixels de large. */
+@media (max-width:900px){
+  .glayout{flex-direction:column}
+  .gside{flex:0 0 auto;border-right:0;border-bottom:1px solid var(--border);
+    flex-direction:row;flex-wrap:wrap;align-items:center}
+  .gs-label{width:100%;margin:6px 0 0}
+}
 
 /* Fiche détaillée — une PAGE, pas une popup */
 .detail{max-width:960px}

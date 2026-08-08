@@ -5,15 +5,16 @@
   // carte mono-écosystème : on filtre par TYPE d'entité et par ÉCOSYSTÈME.
   // `tab` découpe le rapport : tout empiler dans un seul défilement rendait la
   // page illisible dès qu'un projet dépassait quelques dizaines d'entités.
-  var state = { q:'', kind:'all', source:'all', tab:'overview', detail:null };
+  var state = { q:'', kind:'all', source:'all', tab:'overview', detail:null, impact:null };
 
   var TABS = [
-    { key:'overview', icon:'▦', label:'Vue d\'ensemble' },
-    { key:'impact',   icon:'🎯', label:'Impact' },
-    { key:'graph',    icon:'🕸', label:'Graphe' },
-    { key:'timeline', icon:'🕰', label:'Timeline' },
-    { key:'entities', icon:'📇', label:'Entités' },
-    { key:'tree',     icon:'🌳', label:'Fichiers' },
+    { key:'overview',   icon:'▦', label:'Vue d\'ensemble' },
+    { key:'impact',     icon:'🎯', label:'Impact' },
+    { key:'governance', icon:'⚖️', label:'Gouvernance' },
+    { key:'graph',      icon:'🕸', label:'Graphe' },
+    { key:'timeline',   icon:'🕰', label:'Timeline' },
+    { key:'entities',   icon:'📇', label:'Entités' },
+    { key:'tree',       icon:'🌳', label:'Fichiers' },
   ];
 
   // ----- Rôles dans le fil d'impact -----------------------------------------
@@ -102,10 +103,18 @@
     if(state.detail && byId[state.detail]){ c.appendChild(buildDetailPage(byId[state.detail])); return; }
 
     if(state.tab==='overview'){
-      c.appendChild(buildScorePanel());
-      c.appendChild(buildAlertsPanel());
+      c.appendChild(buildKpis());
+      c.appendChild(buildKindTiles());
       c.appendChild(buildSourcesPanel());
       c.appendChild(buildHistogram());
+    } else if(state.tab==='governance'){
+      // Le détail du score, les alertes et les leviers sont réunis ici : c'est
+      // le poste de travail de la gouvernance, pas un encart du tableau de bord.
+      c.appendChild(buildScorePanel());
+      c.appendChild(buildRecoPanel());
+      var reco = el('div'); reco.id='reco-detail';
+      c.appendChild(reco);
+      c.appendChild(buildAlertsPanel());
     } else if(state.tab==='impact'){
       c.appendChild(buildImpactPanel());
       var ch = buildChangesPanel();
@@ -166,6 +175,35 @@
     band.appendChild(cell('Alertes de gouvernance', alerts,
       alerts ? 'à traiter' : 'aucune', alerts ? '#f59e0b' : '#22c55e'));
     return band;
+  }
+
+  // Tuiles « composants IA détectés » : une par type présent, teintée de sa
+  // couleur, avec l'écosystème d'où il vient. Se lit d'un coup d'œil, là où
+  // l'histogramme demande de suivre une barre.
+  function buildKindTiles(){
+    var wrap = el('div');
+    wrap.appendChild(el('div','sec-label','Composants IA détectés'));
+    var grid = el('div','tiles');
+    DATA.kinds.forEach(function(k){
+      var sources = {};
+      DATA.entities.forEach(function(e){ if(e.kind===k.key) sources[e.source]=1; });
+      var names = Object.keys(sources).map(function(id){ return srcOf(id).label; });
+
+      var t = el('div','tile');
+      t.style.borderColor = k.color+'55';
+      t.style.background = 'linear-gradient(0deg,'+k.color+'0f,'+k.color+'0f),var(--panel)';
+      var head = el('div','tile-head');
+      head.style.color = k.color;
+      head.textContent = k.icon+' '+k.label;
+      t.appendChild(head);
+      t.appendChild(el('div','tile-n', String(k.count)));
+      t.appendChild(el('div','tile-src', names.join(' · ')));
+      t.title = 'Voir les '+k.count+' '+k.label.toLowerCase();
+      t.onclick=function(){ focusEntities('kind', k.key); };
+      grid.appendChild(t);
+    });
+    wrap.appendChild(grid);
+    return wrap;
   }
 
   function buildSourcesPanel(){
@@ -380,7 +418,98 @@
     ].filter(function(p){ return p.value !== null; });
 
     var score = Math.round(parts.reduce(function(s,p){ return s+p.value; },0) / parts.length * 100);
-    return { score:score, parts:parts };
+    // Les compteurs bruts sont conservés : c'est ce qui permet de chiffrer
+    // honnêtement le gain d'une action, au lieu de l'estimer au doigt mouillé.
+    return {
+      score: score, parts: parts,
+      raw: {
+        total: ents.length,
+        isolated: ents.filter(function(e){ return !degree[e.id]; }),
+        actors: actors,
+        untraced: actors.filter(function(e){ return !withCode[e.id]; }),
+        dated: dated.length,
+        stale: dated.filter(function(e){ return Date.parse(e.mtime) < limit; }),
+        alerted: ents.filter(function(e){ return e.tone==='warn'||e.tone==='danger'; }),
+      },
+    };
+  }
+
+  // Combien de points le score gagnerait si `n` entités passaient du mauvais
+  // côté d'une composante au bon. Une composante vaut 1/N du score total.
+  function pointsFor(m, componentKey, n, universe){
+    if(!universe || !n) return 0;
+    var present = m.parts.some(function(p){ return p.key===componentKey; });
+    if(!present) return 0;
+    return Math.round((n/universe) / m.parts.length * 100);
+  }
+
+  // Recommandations : chacune dit CE QU'IL FAUT FAIRE et CE QUE ÇA RAPPORTE.
+  // Un score sans levier n'est qu'un constat.
+  function recommendations(){
+    var m = maturity();
+    if(!m) return [];
+    var r = m.raw;
+    var out = [];
+
+    if(r.untraced.length){
+      out.push({
+        label: 'Relier ' + r.untraced.length + ' skill(s), commande(s) ou agent(s) à des fichiers de code réels',
+        why: 'Ils ne citent aucun chemin existant : impossible de savoir ce qu\'ils touchent.',
+        component: 'Traçabilité',
+        points: pointsFor(m, 'traced', r.untraced.length, r.actors.length),
+        items: r.untraced,
+      });
+    }
+
+    // Un change terminé mais non archivé est le cas le plus fréquent, et le
+    // plus simple à corriger : il porte déjà son badge « à archiver ».
+    var toArchive = r.alerted.filter(function(e){
+      return (e.badges||[]).some(function(b){ return /archiver/i.test(b.text); });
+    });
+    if(toArchive.length){
+      out.push({
+        label: 'Archiver ' + toArchive.length + ' change(s) terminé(s)',
+        why: 'Toutes leurs tâches sont faites : ils encombrent la liste des changes en cours.',
+        component: 'Hygiène',
+        points: pointsFor(m, 'clean', toArchive.length, r.total),
+        items: toArchive,
+      });
+    }
+
+    var otherAlerts = r.alerted.filter(function(e){ return toArchive.indexOf(e) === -1; });
+    if(otherAlerts.length){
+      out.push({
+        label: 'Traiter ' + otherAlerts.length + ' alerte(s) restante(s)',
+        why: 'Doublons de déclaration, formats hérités ou configurations illisibles.',
+        component: 'Hygiène',
+        points: pointsFor(m, 'clean', otherAlerts.length, r.total),
+        items: otherAlerts,
+      });
+    }
+
+    if(r.isolated.length){
+      out.push({
+        label: 'Référencer ou supprimer ' + r.isolated.length + ' entité(s) isolée(s)',
+        why: 'Rien ne les cite et elles ne touchent aucun code : ce sont des candidates à la suppression.',
+        component: 'Connexion',
+        points: pointsFor(m, 'linked', r.isolated.length, r.total),
+        items: r.isolated,
+      });
+    }
+
+    if(r.stale.length){
+      out.push({
+        label: 'Revoir ' + r.stale.length + ' entité(s) non modifiée(s) depuis 90 jours',
+        why: 'La config dort pendant que le code avance — c\'est la définition de la dette documentaire.',
+        component: 'Fraîcheur',
+        points: pointsFor(m, 'fresh', r.stale.length, r.dated),
+        items: r.stale,
+      });
+    }
+
+    // Sous 1 point, la recommandation coûte plus d'attention qu'elle n'en vaut.
+    return out.filter(function(x){ return x.points >= 1; })
+              .sort(function(a,b){ return b.points - a.points; });
   }
 
   function buildScorePanel(){
@@ -418,6 +547,68 @@
     if(pct >= 75) return '#22c55e';
     if(pct >= 50) return '#f59e0b';
     return '#f43f5e';
+  }
+
+  function buildRecoPanel(){
+    var recos = recommendations();
+    var p = el('div','panel');
+    p.appendChild(h2('📈 Ce qui ferait monter le score'));
+    if(!recos.length){
+      p.appendChild(el('div','ok-note','✔ Rien à corriger : aucune action ne rapporterait un point entier.'));
+      return p;
+    }
+    var hint = el('div','hint');
+    hint.textContent='Gains calculés sur les composantes réelles du score : chaque composante pèse 1/'+
+      (maturity().parts.length)+' du total. Cliquez une ligne pour voir les entités concernées.';
+    p.appendChild(hint);
+
+    var list = el('div','recos');
+    recos.forEach(function(r){
+      var row = el('div','reco');
+      row.appendChild(el('span','reco-arrow','→'));
+      var body = el('div','reco-body');
+      body.appendChild(el('div','reco-label', r.label));
+      body.appendChild(el('div','reco-why', r.why));
+      row.appendChild(body);
+      var gain = el('span','reco-gain','+'+r.points+' pt'+(r.points>1?'s':'')+' '+r.component);
+      row.appendChild(gain);
+      row.onclick=function(){ openReco(r); };
+      list.appendChild(row);
+    });
+    p.appendChild(list);
+    return p;
+  }
+
+  // Le détail d'une recommandation liste les entités visées : sans elles,
+  // « relier 12 skills » ne dit pas lesquelles.
+  function openReco(r){
+    var zone = document.getElementById('reco-detail');
+    if(!zone) return;
+    zone.innerHTML='';
+    var p = el('div','panel');
+    p.appendChild(h2('🎯 ' + r.label));
+    var hint = el('div','hint'); hint.textContent = r.why;
+    p.appendChild(hint);
+    var list = el('div','alerts');
+    r.items.slice(0,40).forEach(function(e){
+      var k = kindOf(e.kind), s = srcOf(e.source);
+      var row = el('div','alert info');
+      row.appendChild(el('span','a-tone','○'));
+      var b = el('div','a-body');
+      var t = el('div','a-title');
+      t.appendChild(document.createTextNode(e.name));
+      var sp = el('span','srcpill', s.icon+' '+s.label); sp.style.background=s.color;
+      t.appendChild(sp);
+      b.appendChild(t);
+      b.appendChild(el('div','a-msg', k.one + (e.path ? ' — ' + e.path : '')));
+      row.appendChild(b);
+      row.onclick=function(){ openDetail(e); };
+      list.appendChild(row);
+    });
+    if(r.items.length>40) list.appendChild(el('div','tl-more','+ '+(r.items.length-40)+' autre(s)'));
+    p.appendChild(list);
+    zone.appendChild(p);
+    p.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
 
   // ------------------------------------------------- alertes de gouvernance --
@@ -523,17 +714,56 @@
     return chains;
   }
 
+  function pickChip(id, label, count, active){
+    var c = el('div','ichip'+(active?' on':''));
+    c.appendChild(document.createTextNode(label));
+    c.appendChild(el('span','chipn', String(count)));
+    c.onclick=function(){ state.impact = (id==='all') ? null : id; renderTab(); };
+    return c;
+  }
+
   function buildImpactPanel(){
-    var chains = impactChains();
+    var all = impactChains();
     var p = el('div','panel');
     p.appendChild(h2('🎯 Fil d\'impact'));
     var hint = el('div','hint');
     hint.textContent='Chaque ligne se lit « ce qui prescrit → ce qui agit → ce que ça atteint ». Les fils marqués « transverse » franchissent une frontière d\'outil : ce sont eux que personne ne voit sans AI-MAP.';
     p.appendChild(hint);
 
-    if(!chains.length){
+    if(!all.length){
       p.appendChild(el('div','empty','Aucun fil : aucune skill, commande ou agent n\'est relié à une prescription ni à une cible.'));
       return p;
+    }
+
+    // Sélecteur d'origine : afficher TOUS les fils à la fois est un déversoir.
+    // On demande d'abord « lequel ? », puis on répond.
+    var origins = [];
+    var seenOrigin = {};
+    all.forEach(function(c){
+      c.origins.forEach(function(o){
+        if(seenOrigin[o.id]) return;
+        seenOrigin[o.id] = 1;
+        origins.push(o);
+      });
+    });
+    origins.sort(function(a,b){
+      return ORIGIN_KINDS[a.kind]-ORIGIN_KINDS[b.kind] || a.name.localeCompare(b.name);
+    });
+
+    var chains = all;
+    if(origins.length > 1){
+      var sel = el('div','isel');
+      sel.appendChild(pickChip('all', 'Tous les fils', all.length, state.impact===null));
+      origins.forEach(function(o){
+        var n = all.filter(function(c){ return c.origins.indexOf(o) !== -1; }).length;
+        sel.appendChild(pickChip(o.id, o.name, n, state.impact===o.id));
+      });
+      p.appendChild(sel);
+      if(state.impact){
+        chains = all.filter(function(c){
+          return c.origins.some(function(o){ return o.id === state.impact; });
+        });
+      }
     }
 
     var box = el('div','chains');
@@ -1049,7 +1279,7 @@
   // les outils génériques (Bash, Read, search…) et les éléments sans aucune
   // relation représentent l'essentiel de l'encombrement du graphe sans rien
   // apprendre. On peut les rétablir d'une case à cocher.
-  var gState = { view:'network', colorBy:'kind', show:{}, showGeneric:false, showOrphans:false };
+  var gState = { view:'network', colorBy:'kind', show:{}, showGeneric:false, showOrphans:false, kinds:{} };
   (function(){ (DATA.graph.edgeTypes||[]).forEach(function(t){ gState.show[t.type]=true; }); })();
   var graphApi = null;
 
@@ -1060,6 +1290,8 @@
     if(!gState.showGeneric){
       g.nodes.forEach(function(n){ if(n.kind==='tool') drop[n.id]=1; });
     }
+    // Types décochés dans la barre latérale.
+    g.nodes.forEach(function(n){ if(gState.kinds[n.kind] === false) drop[n.id]=1; });
     var edges = (g.edges||[]).filter(function(e){
       return gState.show[e.type] && !drop[e.s] && !drop[e.t];
     });
@@ -1073,105 +1305,140 @@
     return { nodes:nodes, edges:edges, hidden:(g.nodes||[]).length - nodes.length };
   }
 
+  // Panneau du graphe : contrôles en BARRE LATÉRALE, canvas à droite.
+  // Empilés au-dessus du canvas, les contrôles lui volaient sa hauteur et
+  // repoussaient le graphe hors de l'écran.
   function buildGraphPanel(){
-    var panel = el('div','panel');
+    var panel = el('div','panel graph-panel');
     panel.id='graph-panel';
-    panel.appendChild(h2('🕸️ Graphe transverse'));
 
     var g = DATA.graph || { nodes:[], edges:[] };
-    if(!g.nodes.length){ panel.appendChild(el('div','empty','Aucune entité à relier.')); return panel; }
+    if(!g.nodes.length){
+      panel.appendChild(h2('🕸️ Graphe transverse'));
+      panel.appendChild(el('div','empty','Aucune entité à relier.'));
+      return panel;
+    }
 
-    var hint = el('div','hint');
-    hint.textContent = gState.view==='mcd'
-      ? 'Vue MCD (Merise) : chaque entité devient une boîte (type + nom + fichier). Verbe et cardinalités apparaissent au survol dès que le graphe est dense, sinon les étiquettes se superposent aux entités.'
-      : 'Relations réelles entre écosystèmes. Les liens « cite » et « impacte » sont ceux qui traversent les frontières d\'outils — c\'est là que se lit le fil Exigence → Skill → Outil MCP → Code.';
-    panel.appendChild(hint);
+    var vis = visibleGraph();
+    var layout = el('div','glayout');
+    layout.appendChild(buildGraphSidebar(g, vis));
 
-    var ctr = el('div','gctl');
+    var main = el('div','gmain');
+    main.appendChild(buildGraphTools(panel));
 
-    var seg = el('div','seg');
-    [['network','🕸️ Réseau'],['mcd','🗂️ MCD']].forEach(function(v){
+    if(!vis.nodes.length){
+      main.appendChild(el('div','empty',
+        'Les filtres actifs masquent la totalité du graphe. Réactivez un type d\'entité, un type de relation, ou cochez « Éléments isolés ».'));
+      layout.appendChild(main);
+      panel.appendChild(layout);
+      return panel;
+    }
+
+    var box = el('div','gcanvas');
+    var canvas = document.createElement('canvas');
+    canvas.id='rel-graph'; canvas.className='graph';
+    canvas.style.height=(gState.view==='mcd'?'620px':'560px');
+    box.appendChild(canvas);
+    box.appendChild(el('div','gstat', vis.nodes.length+' nœuds · '+vis.edges.length+' liens'));
+    main.appendChild(box);
+
+    layout.appendChild(main);
+    panel.appendChild(layout);
+    return panel;
+  }
+
+  function buildGraphSidebar(g, vis){
+    var side = el('aside','gside');
+
+    side.appendChild(el('div','gs-label','Mode'));
+    var seg = el('div','seg gs-seg');
+    [['network','Réseau'],['mcd','MCD']].forEach(function(v){
       var b=el('button',gState.view===v[0]?'on':null,v[1]);
       b.onclick=function(){ if(gState.view!==v[0]){ gState.view=v[0]; renderTab(); } };
       seg.appendChild(b);
     });
-    ctr.appendChild(seg);
+    side.appendChild(seg);
 
-    var seg2 = el('div','seg');
-    [['kind','Couleur : type'],['source','Couleur : écosystème']].forEach(function(v){
+    var seg2 = el('div','seg gs-seg');
+    [['kind','Type'],['source','Écosystème']].forEach(function(v){
       var b=el('button',gState.colorBy===v[0]?'on':null,v[1]);
+      b.title='Colorer par '+v[1].toLowerCase();
       b.onclick=function(){ if(gState.colorBy!==v[0]){ gState.colorBy=v[0]; renderTab(); } };
       seg2.appendChild(b);
     });
-    ctr.appendChild(seg2);
+    side.appendChild(seg2);
 
-    var reorg = el('button','btn','↻ Réorganiser');
-    reorg.onclick=function(){ initGraph(true); };
-    ctr.appendChild(reorg);
-    panel.appendChild(ctr);
+    // TYPES — à la fois légende ET filtre, avec le compte réel. Deux fonctions
+    // pour un seul composant, au lieu d'une légende inerte à côté de cases.
+    side.appendChild(el('div','gs-label','Types'));
+    var counts = {};
+    g.nodes.forEach(function(n){ counts[n.kind] = (counts[n.kind]||0)+1; });
+    Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; }).forEach(function(kind){
+      var k = kindOf(kind);
+      var on = gState.kinds[kind] !== false;
+      var row = el('button','gs-type'+(on?'':' off'));
+      row.style.borderLeftColor = k.color;
+      if(on) row.style.background = k.color+'14';
+      var dot = el('span','dot'); dot.style.background=k.color;
+      row.appendChild(dot);
+      var nm = el('span','gs-tname', k.one);
+      if(on) nm.style.color = k.color;
+      row.appendChild(nm);
+      row.appendChild(el('span','gs-tn', String(counts[kind])));
+      row.title = (on?'Masquer':'Afficher')+' les '+k.label.toLowerCase();
+      row.onclick=function(){ gState.kinds[kind] = !on; renderTab(); };
+      side.appendChild(row);
+    });
 
-    // Filtres par type de relation (seuls ceux réellement présents)
-    var etr = el('div','gctl');
+    // LIENS — même principe : le trait montre le style, la case filtre.
+    side.appendChild(el('div','gs-label','Liens'));
     (DATA.graph.edgeTypes||[]).forEach(function(t){
       var n = g.edges.filter(function(e){ return e.type===t.type; }).length;
       if(!n) return;
-      var lab = el('label','etoggle');
+      var lab = el('label','gs-edge');
       var cb = el('input'); cb.type='checkbox'; cb.checked=gState.show[t.type];
-      cb.onchange=function(){ gState.show[t.type]=cb.checked; initGraph(); };
+      cb.onchange=function(){ gState.show[t.type]=cb.checked; renderTab(); };
       var sw = el('span','eline');
       sw.style.borderTop=(t.dashed?'2px dashed ':'2px solid ')+t.color;
       lab.appendChild(cb); lab.appendChild(sw);
-      lab.appendChild(document.createTextNode(t.label+' ('+n+')'));
-      etr.appendChild(lab);
+      lab.appendChild(document.createTextNode(t.verb));
+      lab.appendChild(el('span','gs-tn', String(n)));
+      side.appendChild(lab);
     });
-    // Filtres de lisibilité, séparés des filtres de relation.
-    var vis = visibleGraph();
-    var dens = el('div','gctl');
-    dens.appendChild(toggleBox('showGeneric', 'Outils génériques',
+
+    side.appendChild(el('div','gs-label','Lisibilité'));
+    side.appendChild(toggleBox('showGeneric', 'Outils génériques',
       'Bash, Read, search… — ils encombrent beaucoup et n\'apprennent rien'));
-    dens.appendChild(toggleBox('showOrphans', 'Éléments isolés',
+    side.appendChild(toggleBox('showOrphans', 'Éléments isolés',
       'entités sans aucune relation visible'));
     if(vis.hidden){
-      var note = el('span','ghidden', vis.hidden + ' élément(s) masqué(s) · ' + vis.nodes.length + ' affiché(s)');
-      dens.appendChild(note);
+      side.appendChild(el('div','ghidden', vis.hidden+' masqué(s)'));
     }
-    panel.appendChild(etr);
-    panel.appendChild(dens);
 
-    // Légende suivant le mode de coloration
-    var leg = el('div','glegend');
-    var seenLeg = {};
-    g.nodes.forEach(function(n){
-      var key = gState.colorBy==='source' ? n.source : n.kind;
-      if(seenLeg[key]) return;
-      seenLeg[key]=1;
-      var color = gState.colorBy==='source' ? n.sourceColor : n.kindColor;
-      var label = gState.colorBy==='source'
-        ? (n.source==='tool' ? 'outil dérivé' : srcOf(n.source).label)
-        : kindOf(n.kind).label;
-      var it=el('span','it');
-      var d=el('span','dot'); d.style.background=color;
-      it.appendChild(d); it.appendChild(document.createTextNode(label));
-      leg.appendChild(it);
-    });
-    panel.appendChild(leg);
+    var reorg = el('button','btn gs-btn','↻ Réorganiser');
+    reorg.onclick=function(){ initGraph(true); };
+    side.appendChild(reorg);
+    return side;
+  }
 
+  function buildGraphTools(panel){
     var gt = el('div','gtools');
     function gbtn(txt,title,fn){ var b=el('button','btn',txt); b.title=title; b.onclick=fn; return b; }
     gt.appendChild(gbtn('－','Dézoomer',function(){ if(graphApi) graphApi.zoomBy(1/1.2); }));
     gt.appendChild(gbtn('＋','Zoomer',function(){ if(graphApi) graphApi.zoomBy(1.2); }));
     gt.appendChild(gbtn('⤢ Ajuster','Tout afficher',function(){ if(graphApi) graphApi.fit(); }));
+
     // Vrai plein écran via l'API Fullscreen : le graphe occupe l'ÉCRAN, pas
     // seulement la fenêtre. Repli sur un recouvrement CSS si l'API est refusée
     // (webview restreinte, iframe sans autorisation).
     var fsBtn = gbtn('⛶ Plein écran','Basculer le plein écran',null);
     function applyFs(full){
-      fsBtn.textContent = full ? '✕ Quitter le plein écran' : '⛶ Plein écran';
+      fsBtn.textContent = full ? '✕ Quitter' : '⛶ Plein écran';
       panel.classList.toggle('fullscreen', full);
       var cv = document.getElementById('rel-graph');
       // En plein écran la hauteur est pilotée par le CSS (flex) : on retire la
       // hauteur en dur pour que le canvas prenne tout l'espace restant.
-      if(cv) cv.style.height = full ? '' : (gState.view==='mcd' ? '600px' : '500px');
+      if(cv) cv.style.height = full ? '' : (gState.view==='mcd' ? '620px' : '560px');
       // Mesurer APRÈS que le navigateur a appliqué la mise en page, sinon le
       // canvas conserve ses anciennes dimensions.
       requestAnimationFrame(function(){
@@ -1190,21 +1457,7 @@
       applyFs(document.fullscreenElement === panel);
     });
     gt.appendChild(fsBtn);
-    panel.appendChild(gt);
-
-    // Les filtres peuvent tout masquer : un canvas vide sans explication
-    // ressemblerait à un bug.
-    if(!vis.nodes.length){
-      panel.appendChild(el('div','empty',
-        'Les filtres actifs masquent la totalité du graphe. Cochez « Éléments isolés » ou réactivez un type de relation.'));
-      return panel;
-    }
-
-    var canvas = document.createElement('canvas');
-    canvas.id='rel-graph'; canvas.className='graph';
-    canvas.style.height=(gState.view==='mcd'?'600px':'500px');
-    panel.appendChild(canvas);
-    return panel;
+    return gt;
   }
 
   function toggleBox(key, label, help){
