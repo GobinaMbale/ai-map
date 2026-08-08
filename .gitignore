@@ -3,3 +3,5 @@ node_modules/
 ai-map.report.html
 ai-map.report.json
 .DS_Store
+# Captures de la maquette de référence : utiles en local, hors du dépôt.
+docs/design-reference/
