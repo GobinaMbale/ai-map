@@ -14,7 +14,10 @@
     "map": "node bin/ai-map.mjs .",
     "test": "node test/smoke.mjs && node test/view.mjs",
     "demo": "node src/ai-map.mjs examples/demo-project --open",
-    "icon": "node scripts/make-icon.mjs"
+    "icon": "node scripts/make-icon.mjs",
+    "shots": "node scripts/screenshot.mjs",
+    "shots:dark": "node scripts/screenshot.mjs --dark -o .shots-dark",
+    "check": "node build.mjs && node test/smoke.mjs && node test/view.mjs && node scripts/screenshot.mjs"
   },
   "engines": {
     "node": ">=16"
@@ -43,5 +46,8 @@
   "bugs": {
     "url": "https://github.com/GobinaMbale/ai-map/issues"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "playwright-core": "^1.49.0"
+  }
 }

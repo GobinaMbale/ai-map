@@ -21,7 +21,7 @@ les frontières d'outils.
 
 ## Ce que produit l'outil
 
-Le rapport est découpé en **six onglets** plutôt qu'en un seul défilement — un
+Le rapport est découpé en **sept onglets** plutôt qu'en un seul défilement — un
 projet réel dépasse vite la centaine d'entités, et tout empiler rendait la page
 illisible.
 
@@ -219,7 +219,8 @@ ai-map/
 │       ├── cursor/index.mjs       └── mcp/index.mjs
 │       └── copilot/index.mjs
 ├── vscode-extension/              # extension VS Code (vue latérale + webview)
-├── scripts/make-icon.mjs          # génère l'icône PNG sans dépendance
+├── scripts/{make-icon,screenshot}.mjs  # icône PNG · captures de vérification
+├── .claude/                       # AI-MAP se cartographie lui-même
 ├── examples/                      # 3 projets de démonstration
 ├── test/{smoke,tree}.mjs          # vérification bout-en-bout (npm test)
 ├── build.mjs                      # bundler zéro-dépendance → bin/ai-map.mjs
@@ -274,9 +275,55 @@ L'icône est un PNG **généré par le dépôt** (`node:zlib`, encodage PNG à l
 suréchantillonnage ×4 pour l'anticrénelage) — aucun binaire opaque commité sans
 sa source.
 
-`npm test` analyse les deux projets d'exemple, contrôle le modèle et le graphe,
+`npm test` analyse les projets d'exemple, contrôle le modèle et le graphe,
 puis **exécute réellement le JS du rapport dans un DOM minimal** — un rapport
 dont le script planterait au premier rendu ne passerait pas inaperçu.
+
+## Vérifier une modification
+
+Les tests prouvent que le rendu **ne plante pas**. Ils ne prouvent jamais qu'il
+est **lisible** : libellés empilés, blocs de code non reconnus, chiffre affiché
+deux fois — rien de tout cela n'échoue en test. Il faut regarder.
+
+```bash
+npm run check              # build + tests + captures
+npm run shots              # captures seules, onglet par onglet → .shots/
+npm run shots -- ../mon-projet    # sur un VRAI projet : les exemples (24
+                                  # entités) ne révèlent pas la densité
+npm run shots:dark         # thème sombre
+```
+
+`scripts/screenshot.mjs` pilote un **Chrome ou Edge déjà installé** — aucun
+navigateur n'est téléchargé, seul `playwright-core` (~5 Mo) est requis, en
+dépendance de **développement**. AI-MAP lui-même conserve `dependencies: {}`.
+
+Le script échoue si la page émet la moindre erreur JS. Les captures ne sont pas
+versionnées : ce sont des artefacts de vérification.
+
+## AI-MAP se cartographie lui-même
+
+Ce dépôt a son propre `.claude/` (skills, règles, commande `/check`) et un
+`CLAUDE.md`. Conséquence utile :
+
+```bash
+npm run map        # AI-MAP lit le .claude/ de AI-MAP
+```
+
+C'est le meilleur test de non-régression des adaptateurs — si la lecture d'un
+`.claude/` casse, ça se voit d'abord ici. Sur ce dépôt : 8 entités, 23
+relations, **aucune entité isolée**, et 17 liens vers les fichiers source que
+les règles décrivent réellement.
+
+| Fichier | Rôle |
+|---|---|
+| `CLAUDE.md` | architecture, règles absolues, commandes |
+| `.claude/rules/bundle.md` | portée plate du bundle, collisions d'identifiants |
+| `.claude/rules/honest-data.md` | rien n'est inventé : liens et points dérivés |
+| `.claude/rules/text-pitfalls.md` | apostrophes, caractères de contrôle, regex ancrées |
+| `.claude/skills/add-adapter` | ajouter un écosystème (6 points de câblage) |
+| `.claude/skills/verify-visual` | vérification visuelle et points de contrôle |
+| `.claude/skills/release` | publication npm / VSIX / Git |
+| `.claude/commands/check.md` | `/check` — la chaîne complète |
 
 ### Contrat d'un plugin
 

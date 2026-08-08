@@ -5,3 +5,7 @@ ai-map.report.json
 .DS_Store
 # Captures de la maquette de référence : utiles en local, hors du dépôt.
 docs/design-reference/
+
+# Captures de vérification visuelle : artefacts, pas documentation.
+.shots/
+.shots-dark/
