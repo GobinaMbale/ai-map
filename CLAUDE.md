@@ -26,7 +26,13 @@ extension VS Code.
 - **Un test par correctif.** `test/smoke.mjs` (modèle, graphe, rapport) et
   `test/view.mjs` (vues de l'extension). Lancer : `npm test`.
 - **Git** : brancher avant de committer si on est sur `main`. Messages en
-  Conventional Commits, terminés par `Co-Authored-By: Claude ...`.
+  **Conventional Commits** — ils déterminent la version et alimentent le
+  changelog. Terminés par `Co-Authored-By: Claude ...`.
+- **Une release par change livré.** Tout change publié donne lieu à une
+  release : version SemVer, entrée `CHANGELOG.md`, nouvelle version de
+  l'extension VS Code si elle a été touchée, et relecture de la description
+  Marketplace si ce que voit l'utilisateur a changé. Lancer
+  `npm run release:prepare`, puis suivre la skill `release`.
 
 ### ❌ Ne jamais
 
@@ -40,6 +46,10 @@ extension VS Code.
   qui demande confirmation et n'écrase jamais un fichier existant.
 - **Déclarer le même identifiant racine dans deux modules de `src/`** — le
   bundle est une portée plate. Voir `.claude/rules/bundle.md`.
+- **Committer, tagguer, pousser ou publier une release sans accord humain
+  explicite.** La préparation est automatique ; la publication ne l'est jamais.
+  Présenter la proposition, s'arrêter, attendre. Voir
+  `.claude/rules/versioning.md`.
 - **Faire passer du texte français par un `-e` de shell.** Les apostrophes s'y
   cassent systématiquement. Voir `.claude/rules/text-pitfalls.md`.
 
@@ -92,6 +102,8 @@ core/reporting          →  HTML autoportant
 | `npm run map` | cartographie CE dépôt (auto-application) |
 | `npm run demo` | ouvre le rapport de `examples/demo-project` |
 | `npm run icon` | régénère l'icône PNG de l'extension |
+| `npm run release:prepare` | **propose** une release — ne modifie rien |
+| `npm run release:apply` | écrit CHANGELOG + versions — toujours sans commit |
 
 Extension VS Code : `cd vscode-extension && npm run package`.
 Tester sans installer : ouvrir `ai-map/` dans VS Code puis **F5**.
@@ -136,3 +148,4 @@ exclus : `Bash` n'est pas un écosystème.
 - `.claude/rules/` — contraintes non négociables (bundle, données, texte).
 - `.claude/skills/` — procédures : ajouter un adaptateur, vérifier
   visuellement, publier.
+- `CHANGELOG.md` — historique des versions ([Keep a Changelog](https://keepachangelog.com/)).
