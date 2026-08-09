@@ -21,6 +21,11 @@ AI-MAP les convertit dans un **modèle universel** unique, puis en dérive un
 **graphe transverse** — les liens que personne ne voit parce qu'ils traversent
 les frontières d'outils.
 
+![Vue d'ensemble d'AI-MAP : score de maturité IA, alertes de gouvernance et composants détectés](docs/screenshots/01-vue-ensemble.png)
+
+<sub>Capture sur un projet réel : 94 entités, 119 relations, 2 écosystèmes.
+Les captures sont reproductibles — `node scripts/listing-shots.mjs`.</sub>
+
 ---
 
 ## Ce que produit l'outil

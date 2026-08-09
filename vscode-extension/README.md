@@ -10,6 +10,8 @@ personne ne voit parce qu'ils traversent les frontières d'outils.
 
 ---
 
+![Vue d'ensemble : score de maturité IA, alertes de gouvernance, composants détectés](https://raw.githubusercontent.com/GobinaMbale/ai-map/main/docs/screenshots/01-vue-ensemble.png)
+
 ## Le problème
 
 Vos configurations IA sont éparpillées : `.claude/`, `openspec/`, `.cursor/`,
@@ -35,6 +37,9 @@ et date de dernière modification.
   type. Ce qui pose problème se repère sans lire.
 - Recherche instantanée, groupes repliables.
 
+<img src="https://raw.githubusercontent.com/GobinaMbale/ai-map/main/docs/screenshots/05-vue-laterale.png" alt="Vue latérale : onglets Entités, Alertes et Changes, avec fiches, badges et dates" width="360">
+
+
 ### Fiche détaillée
 
 Un **onglet de l'éditeur**, pas une popup. Trois volets : *Contenu* (Markdown
@@ -55,6 +60,18 @@ se publie sur un intranet sans rien installer.
 | **Timeline** | activité des 12 derniers mois — repère la config qui dort |
 | **Entités** | recherche + double filtre type × écosystème |
 | **Fichiers** | arborescence des dossiers IA détectés |
+
+Le **fil d'impact** — ce qui prescrit, ce qui agit, ce que ça atteint :
+
+![Fil d'impact : Exigence, Skill, Outil MCP, Code source, reliés par chevrons](https://raw.githubusercontent.com/GobinaMbale/ai-map/main/docs/screenshots/02-impact.png)
+
+La **gouvernance**, où le score devient un levier plutôt qu'un constat :
+
+![Gouvernance : détail du score, recommandations chiffrées en points, alertes actives](https://raw.githubusercontent.com/GobinaMbale/ai-map/main/docs/screenshots/03-gouvernance.png)
+
+Le **graphe transverse**, avec ses filtres par type et par relation :
+
+![Graphe transverse : contrôles en barre latérale, nœuds dimensionnés par degré](https://raw.githubusercontent.com/GobinaMbale/ai-map/main/docs/screenshots/04-graphe.png)
 
 ## Commandes
 
