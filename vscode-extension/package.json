@@ -48,6 +48,12 @@
         "icon": "$(graph)"
       },
       {
+        "command": "aiMap.generateWorkspace",
+        "title": "Générer la carte du portefeuille (multi-projets)",
+        "category": "AI-MAP",
+        "icon": "$(folder-library)"
+      },
+      {
         "command": "aiMap.openInBrowser",
         "title": "Ouvrir la carte dans le navigateur",
         "category": "AI-MAP",
@@ -104,6 +110,11 @@
         },
         {
           "command": "aiMap.saveReport",
+          "when": "view == aiMapView",
+          "group": "1_actions"
+        },
+        {
+          "command": "aiMap.generateWorkspace",
           "when": "view == aiMapView",
           "group": "1_actions"
         }

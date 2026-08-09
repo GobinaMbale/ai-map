@@ -163,6 +163,33 @@ function changesHtml(changes, model) {
   return known + groupHtml('Sans statut', orphan, model);
 }
 
+// ----- Portefeuille --------------------------------------------------------
+// La barre latérale ne peut pas montrer 200 entités réparties sur six projets
+// sans redevenir illisible. Elle montre donc ce qui a du sens à ce niveau :
+// quels projets existent, lesquels sont les plus chargés, et ce qui a divergé.
+function workspaceHtml(model) {
+  const problems = model.totals.misaligned || 0;
+
+  const rows = model.projects.slice()
+    .sort((a, b) => b.entities - a.entities)
+    .map((p) => `<div class="wsrow">
+        <div class="wsname">${esc(p.name)}</div>
+        <div class="wsmeta">${esc(p.rel)} · ${p.entities} entités · ${p.sources.length} écosystème(s)</div>
+      </div>`).join('');
+
+  return `<div class="summary">
+      <strong>${model.totals.projects}</strong> projets ·
+      <strong>${model.totals.entities}</strong> entités ·
+      <strong>${problems}</strong> à réaligner
+    </div>
+    ${problems
+      ? `<div class="wsalert">${problems} artefact(s) partagé(s) ne sont plus alignés entre projets.</div>`
+      : '<div class="wsok">Tout ce qui est partagé entre ces projets est identique.</div>'}
+    <div class="wslist">${rows}</div>
+    <button class="state-btn" data-cmd="report">Ouvrir la carte du portefeuille</button>
+    <button class="state-link" data-cmd="project">Revenir au projet ouvert</button>`;
+}
+
 // ----- Page complète -------------------------------------------------------
 function render(webview, model, state) {
   const n = nonce();
@@ -171,6 +198,10 @@ function render(webview, model, state) {
   let body;
   if (!model || !model.totals || !model.totals.entities) {
     body = stateHtml(state);
+  } else if (model.workspace) {
+    // Un modèle workspace n'a pas d'entités propres : elles appartiennent aux
+    // projets. Rendre la vue habituelle plantait sur `model.entities`.
+    body = workspaceHtml(model);
   } else {
     const { nav, alerts, changes } = tabsHtml(model);
     const byEcosystem = (model.sources || [])
@@ -179,11 +210,24 @@ function render(webview, model, state) {
       .join('');
     const cross = (model.graph && model.graph.edges || []).filter((e) => e.cross).length;
 
+    // D'autres projets IA vivent à côté de celui-ci. Sans cette bannière, la
+    // vue laisse croire que le dossier ouvert n'en contient qu'un — le seul
+    // signal existant partait sur stdout, que personne ne lit dans VS Code.
+    const near = model.nearby && model.nearby.count > 1
+      ? `<div class="wsnear">
+          <div><strong>${model.nearby.count}</strong> projets IA sous ce dossier</div>
+          <div class="wsnear-list">${esc(model.nearby.others.slice(0, 4).join(' · '))}${
+            model.nearby.others.length > 4 ? ' …' : ''}</div>
+          <button class="wsnear-btn" data-cmd="workspace">Voir le portefeuille</button>
+        </div>`
+      : '';
+
     body = `<div class="summary">
         <strong>${model.totals.entities}</strong> entités ·
         <strong>${model.totals.edges}</strong> relations ·
         <strong>${cross}</strong> transverses
       </div>
+      ${near}
       ${nav}
       <input id="q" type="search" placeholder="Rechercher une entité…" autocomplete="off">
       <div id="noresult" class="noresult" hidden>Aucune entité ne correspond.</div>
@@ -256,6 +300,28 @@ function render(webview, model, state) {
     font-family:inherit;font-size:12.5px;font-weight:600;
     background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
   .state-btn:hover{background:var(--vscode-button-hoverBackground)}
+  /* Portefeuille : une ligne par projet, sans fiche ni badge — à ce niveau on
+     compare des projets, on ne consulte pas des entités. */
+  .wslist{display:flex;flex-direction:column;gap:2px;margin:0 0 14px}
+  .wsrow{padding:7px 9px;border-radius:4px;background:var(--vscode-editor-background)}
+  .wsname{font-size:12.5px;font-weight:600}
+  .wsmeta{font-size:10.5px;color:var(--vscode-descriptionForeground);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Bannière « il y a d'autres projets à côté » : discrète, mais actionnable —
+     sinon elle informe sans permettre d'agir. */
+  .wsnear{padding:9px 11px;border-radius:4px;margin:0 0 12px;font-size:11.5px;line-height:1.6;
+    background:var(--vscode-textBlockQuote-background,rgba(127,127,127,.1));
+    border-left:2px solid var(--vscode-textLink-foreground)}
+  .wsnear-list{color:var(--vscode-descriptionForeground);font-size:10.5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wsnear-btn{margin-top:7px;padding:4px 11px;border:0;border-radius:4px;cursor:pointer;
+    font-family:inherit;font-size:11.5px;font-weight:600;
+    background:var(--vscode-button-secondaryBackground,var(--vscode-button-background));
+    color:var(--vscode-button-secondaryForeground,var(--vscode-button-foreground))}
+  .wsnear-btn:hover{background:var(--vscode-button-hoverBackground)}
+  .wsalert,.wsok{font-size:11.5px;line-height:1.5;padding:8px 10px;border-radius:4px;margin:0 0 12px}
+  .wsalert{background:rgba(224,160,48,.13);border-left:2px solid #e0a030}
+  .wsok{background:rgba(60,180,110,.11);border-left:2px solid #3cb46e}
   .state-note{margin-top:22px;font-size:10.5px;line-height:1.7;
     color:var(--vscode-descriptionForeground);opacity:.75}
   .state-note code{font-family:var(--vscode-editor-font-family);font-size:10px}
@@ -266,7 +332,10 @@ ${body}
 <script nonce="${n}">
   const vscode = acquireVsCodeApi();
 
-  document.querySelectorAll('.state-btn').forEach(function(b){
+  // Sélecteur sur l'ATTRIBUT, pas sur une classe : un bouton correctement
+  // déclaré mais habillé d'une autre classe restait muet, sans erreur ni
+  // indice. C'est arrivé au bouton « Voir le portefeuille ».
+  document.querySelectorAll('[data-cmd]').forEach(function(b){
     b.addEventListener('click', function(){ vscode.postMessage({ type: b.dataset.cmd }); });
   });
 

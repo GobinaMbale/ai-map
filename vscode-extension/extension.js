@@ -24,6 +24,10 @@ function activate(context) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('aiMapView', view),
     vscode.commands.registerCommand('aiMap.generate', () => generateAndShow(context)),
+    // Un dossier peut contenir plusieurs projets IA. La carte du portefeuille
+    // reste une commande explicite : basculer d'office changerait le rapport
+    // sous les pieds de qui ouvre un projet qui a lui-même des sous-projets.
+    vscode.commands.registerCommand('aiMap.generateWorkspace', () => generateAndShow(context, true)),
     vscode.commands.registerCommand('aiMap.openInBrowser', () => openInBrowser(context)),
     vscode.commands.registerCommand('aiMap.saveReport', () => saveReport(context)),
     vscode.commands.registerCommand('aiMap.refresh', () => view.reload()),
@@ -49,18 +53,26 @@ function workspaceRoot() {
   return folders && folders.length ? folders[0].uri.fsPath : null;
 }
 
+// La vue latérale porte le mode courant : toutes les commandes qui régénèrent
+// un rapport doivent le suivre, sinon elles ramènent silencieusement à un autre
+// périmètre que celui qu'on regarde.
+function currentMode() {
+  return !!(view && view.workspaceMode);
+}
+
 function openFile(file) {
   vscode.window.showTextDocument(vscode.Uri.file(file), { preview: true });
 }
 
 // ---------------------------------------------------------------------------
 // Exécution du moteur embarqué.
-function runAiMap(context, root, wantJson) {
+function runAiMap(context, root, wantJson, workspace) {
   const script = context.asAbsolutePath(path.join('media', 'ai-map.mjs'));
   const base = path.join(os.tmpdir(), 'ai-map.' + process.pid + '.' + Date.now());
   const htmlPath = base + '.html';
   const args = [script, root, '-o', htmlPath];
   if (wantJson) args.push('--json');
+  if (workspace) args.push('--workspace');
 
   return new Promise((resolve) => {
     cp.execFile(
@@ -78,7 +90,7 @@ function runAiMap(context, root, wantJson) {
   });
 }
 
-async function build(context, title) {
+async function build(context, title, workspace) {
   const root = workspaceRoot();
   if (!root) {
     vscode.window.showErrorMessage('AI-MAP : ouvrez d\'abord un dossier ou un workspace.');
@@ -86,7 +98,7 @@ async function build(context, title) {
   }
   const res = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title },
-    () => runAiMap(context, root, true)
+    () => runAiMap(context, root, true, workspace)
   );
   if (res.error) { vscode.window.showErrorMessage('AI-MAP : ' + res.error); return null; }
   if (res.model) view.setModel(root, res.model);
@@ -95,8 +107,13 @@ async function build(context, title) {
   return { root, ...res };
 }
 
-async function generateAndShow(context) {
-  const res = await build(context, 'AI-MAP : analyse de l\'écosystème…');
+async function generateAndShow(context, workspace) {
+  // Le choix explicite de l'utilisateur devient le mode courant, y compris
+  // pour les ré-analyses automatiques déclenchées par un changement de fichier.
+  if (view) view.workspaceMode = !!workspace;
+  const res = await build(context,
+    workspace ? 'AI-MAP : analyse du portefeuille…' : 'AI-MAP : analyse de l\'écosystème…',
+    workspace);
   if (!res) return;
   let html;
   try { html = fs.readFileSync(res.htmlPath, 'utf8'); }
@@ -113,7 +130,10 @@ async function generateAndShow(context) {
 // La webview convient pour un coup d'œil ; le navigateur donne le plein écran,
 // l'impression et le partage du fichier, qui est autoportant.
 async function openInBrowser(context) {
-  const res = await build(context, 'AI-MAP : génération pour le navigateur…');
+  // Suivre la vue en cours. Sans ça, ouvrir le navigateur depuis le
+  // portefeuille regénérait un rapport mono-projet : on perdait les cinq
+  // autres projets sans le moindre message.
+  const res = await build(context, 'AI-MAP : génération pour le navigateur…', currentMode());
   if (!res) return;
   const opened = await vscode.env.openExternal(vscode.Uri.file(res.htmlPath));
   if (!opened) {
@@ -125,7 +145,7 @@ async function openInBrowser(context) {
 
 // Le fichier temporaire est éphémère : ce n'est pas ce qu'on partage à une équipe.
 async function saveReport(context) {
-  const res = await build(context, 'AI-MAP : génération du rapport…');
+  const res = await build(context, 'AI-MAP : génération du rapport…', currentMode());
   if (!res) return;
   const target = await vscode.window.showSaveDialog({
     saveLabel: 'Enregistrer la carte',
@@ -211,6 +231,9 @@ class AiMapViewProvider {
     this.context = context;
     this.root = null;
     this.model = null;
+    // Portefeuille ou projet : conservé entre deux analyses, sinon un simple
+    // changement de fichier ramenait la vue au projet sans prévenir.
+    this.workspaceMode = false;
     this.state = 'loading';
     this.webview = null;
   }
@@ -227,6 +250,10 @@ class AiMapViewProvider {
     if (msg.type === 'refresh') { this.reload(); return; }
     if (msg.type === 'bootstrap') { vscode.commands.executeCommand('aiMap.bootstrap'); return; }
     if (msg.type === 'openFolder') { vscode.commands.executeCommand('vscode.openFolder'); return; }
+    if (msg.type === 'report') { vscode.commands.executeCommand('aiMap.generate'); return; }
+    if (msg.type === 'workspace') { vscode.commands.executeCommand('aiMap.generateWorkspace'); return; }
+    // Sortie du mode portefeuille : sans elle, on y restait piégé.
+    if (msg.type === 'project') { vscode.commands.executeCommand('aiMap.generate'); return; }
     if (msg.type === 'openDetail') {
       const entity = (this.model && this.model.entities || []).find((e) => e.id === msg.id);
       if (entity) showDetail(this.context, entity, this.model);
@@ -251,7 +278,7 @@ class AiMapViewProvider {
     const root = workspaceRoot();
     if (!root) { this.root = null; this.model = null; this.state = 'nofolder'; this.paint(); return; }
     this.state = 'loading'; this.paint();
-    const res = await runAiMap(this.context, root, true);
+    const res = await runAiMap(this.context, root, true, this.workspaceMode);
     if (res.error) {
       // « Aucun écosystème détecté » n'est pas une erreur : le moteur sort en
       // code non nul, mais c'est un état normal qui mérite son propre message.

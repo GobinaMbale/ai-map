@@ -5,6 +5,7 @@
 // Ni sidebar.js ni detail.js ne dépendent du module `vscode` — c'est
 // délibéré : ça les rend testables ici.
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -12,6 +13,7 @@ import { runPlugins } from '../src/core/registry.mjs';
 import { buildGraph } from '../src/core/graph.mjs';
 import { buildTrees } from '../src/core/explorer.mjs';
 import { buildModel } from '../src/core/model.mjs';
+import { buildWorkspace } from '../src/core/workspace.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -109,6 +111,89 @@ for (const [state, needle] of [
 const emptyHtml = sidebar.render(null, null, 'empty');
 check('l\'état vide propose une action', /data-cmd="bootstrap"/.test(emptyHtml));
 check('l\'état vide liste les emplacements cherchés', emptyHtml.includes('.windsurf/'));
+
+// Le modèle portefeuille sert à deux blocs : le câblage des boutons ci-dessous
+// et la vue latérale plus bas.
+const ws = buildWorkspace({ root: path.join(ROOT, 'examples') });
+
+// ----- Tout bouton déclaré doit AGIR ---------------------------------------
+// Un bouton `data-cmd` a deux façons de rester muet, aucune ne produit
+// d'erreur : la page ne le câble pas (le script ciblait `.state-btn`, pas
+// l'attribut), ou l'extension n'a pas de gestionnaire pour son message.
+// « Voir le portefeuille » est tombé dans le premier cas.
+console.log('\ncâblage des boutons');
+{
+  const extSrc = fs.readFileSync(
+    path.join(ROOT, 'vscode-extension', 'extension.js'), 'utf8');
+
+  // Tous les rendus possibles, pour ne manquer aucun bouton.
+  const screens = [
+    sidebar.render(null, model, 'ready'),
+    sidebar.render(null, { ...model, nearby: { count: 3, others: ['a'] } }, 'ready'),
+    sidebar.render(null, ws, 'ready'),
+    ...['empty', 'nofolder', 'loading', 'error'].map((s) => sidebar.render(null, null, s)),
+  ];
+
+  check('le script câble l\'ATTRIBUT data-cmd, pas une classe',
+    screens.every((s) => /querySelectorAll\('\[data-cmd\]'\)/.test(s)));
+
+  const cmds = new Set();
+  for (const s of screens) {
+    for (const m of s.matchAll(/data-cmd="([\w.-]+)"/g)) cmds.add(m[1]);
+  }
+  check('des boutons sont bien déclarés', cmds.size >= 4, [...cmds].join(', '));
+
+  // `openFolder` est traité par VS Code lui-même, les autres par onMessage.
+  const unhandled = [...cmds].filter(
+    (c) => !new RegExp("msg\\.type === '" + c + "'").test(extSrc));
+  check('chaque commande a un gestionnaire dans extension.js',
+    unhandled.length === 0, 'sans gestionnaire : ' + unhandled.join(', '));
+}
+
+// ----- Projets voisins : la découvrabilité du portefeuille ------------------
+// Un dossier peut contenir plusieurs projets IA. En mono-projet, le seul signal
+// partait sur stdout — invisible dans VS Code, où la vue laissait croire que le
+// dossier n'en contenait qu'un.
+console.log('\nprojets voisins');
+{
+  const solo = sidebar.render(null, model, 'ready');
+  check('sans voisin, aucune bannière', !/class="wsnear"/.test(solo));
+
+  const withNear = sidebar.render(null,
+    { ...model, nearby: { count: 4, others: ['a', 'b', 'c'] } }, 'ready');
+  check('avec voisins, une bannière apparaît', /class="wsnear"/.test(withNear));
+  check('elle annonce le nombre de projets', /<strong>4<\/strong> projets IA/.test(withNear));
+  check('elle est actionnable', /data-cmd="workspace"/.test(withNear));
+  check('elle nomme les voisins', /a · b · c/.test(withNear));
+}
+
+// ----- Vue latérale en mode portefeuille -----------------------------------
+// Un modèle workspace n'a pas de tableau `entities`, mais ses `totals.entities`
+// sont non nuls : le rendu habituel passait le garde-fou puis plantait dessus.
+console.log('\nvue latérale (portefeuille)');
+const wsHtml = sidebar.render(null, ws, 'ready');
+
+check('le rendu workspace ne plante pas', typeof wsHtml === 'string' && wsHtml.length > 200);
+check('une ligne par projet', count(wsHtml, /class="wsrow"/g) === ws.totals.projects,
+  count(wsHtml, /class="wsrow"/g) + ' pour ' + ws.totals.projects);
+check('la carte du portefeuille est proposée', /data-cmd="report"/.test(wsHtml));
+check('aucune fiche d\'entité à ce niveau', !/class="card"/.test(wsHtml));
+check('l\'alignement des artefacts est annoncé',
+  /class="wsok"/.test(wsHtml) || /class="wsalert"/.test(wsHtml));
+check('une sortie du mode portefeuille est offerte', /data-cmd="project"/.test(wsHtml));
+
+// Toute commande qui REGÉNÈRE un rapport doit suivre le mode courant.
+// « Ouvrir dans le navigateur » repartait en mono-projet depuis le
+// portefeuille : les cinq autres projets disparaissaient sans un mot.
+{
+  const extSrc = fs.readFileSync(
+    path.join(ROOT, 'vscode-extension', 'extension.js'), 'utf8');
+  const calls = [...extSrc.matchAll(/\bbuild\(context,[\s\S]*?\);/g)].map((x) => x[0]);
+  const blind = calls.filter((c) => !/currentMode\(\)|workspace/.test(c));
+  check('chaque génération de rapport suit le mode courant',
+    calls.length >= 3 && blind.length === 0,
+    calls.length + ' appel(s) · sans mode : ' + (blind.join(' / ') || 'aucun'));
+}
 
 // ----- Fiche détaillée -----------------------------------------------------
 console.log('\nfiche détaillée (onglet)');

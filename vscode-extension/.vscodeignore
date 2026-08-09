@@ -1,6 +1,16 @@
+# Ce que le paquet .vsix NE doit PAS contenir.
+#
+# Tout fichier non exclu est distribué aux utilisateurs. Un manifeste de
+# sauvegarde embarqué met une SECONDE version de package.json dans le paquet —
+# c'est arrivé en préparant une build d'essai.
 .vscode/**
+.vscode-test/**
+node_modules/**
 .gitignore
 **/*.vsix
+**/*.bak
+**/*.log
+**/*.map
 **/tsconfig.json
 **/.eslintrc.json
-node_modules/**
+**/.DS_Store
