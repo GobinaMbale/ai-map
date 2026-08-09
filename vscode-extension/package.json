@@ -1,8 +1,8 @@
 {
   "name": "ai-map-vscode",
   "displayName": "AI-MAP",
-  "description": "Cartographie l'écosystème IA du workspace (Claude Code, OpenSpec, Cursor, Copilot, Roo, Windsurf, MCP) : fil d'impact, gouvernance, graphe transverse, liens vers le code source. Zéro dépendance, zéro réseau.",
-  "version": "1.0.1",
+  "description": "Cartographie l'écosystème IA du workspace (Claude Code, OpenSpec, Cursor, Copilot, Roo, Windsurf, MCP) : fil d'impact, gouvernance, graphe transverse, liens vers le code, vue portefeuille multi-projets. Zéro dépendance, zéro réseau.",
+  "version": "1.1.0",
   "publisher": "gobinadaniel",
   "license": "MIT",
   "icon": "media/icon.png",

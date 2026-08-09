@@ -1,6 +1,6 @@
 {
   "name": "ai-map",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Carte HTML autoportante de l'écosystème IA d'un projet : Claude Code, OpenSpec, MCP — modèle universel, graphe transverse, analyse d'impact. Zéro dépendance, zéro réseau.",
   "type": "module",
   "bin": {
