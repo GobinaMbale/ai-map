@@ -118,6 +118,56 @@ qui n'a que `.claude/` produit une carte parfaitement exploitable.
 - **Aucune dépendance.** Le moteur est embarqué et exécuté par VS Code lui-même :
   Node.js n'a pas besoin d'être installé.
 
+## Confiance
+
+Cette extension lit les fichiers de configuration de vos projets. Vous avez
+raison de vous demander ce qu'elle en fait — voici de quoi vérifier plutôt que
+de me croire.
+
+### « Éditeur non vérifié » — ce message est normal
+
+À la première installation, VS Code affiche :
+
+> *Faites-vous confiance à l'éditeur… ? Il s'agit de la première extension que
+> vous installez à partir de cet éditeur.*
+
+Ce message apparaît pour **tout éditeur dont vous n'avez encore rien installé**,
+y compris des extensions à des millions d'installations. VS Code ne contrôlant
+pas les extensions tierces, il vous demande une décision consciente. Ce n'est
+pas un signalement sur ce paquet.
+
+### Ce que vous pouvez vérifier vous-même
+
+Le moteur entier tient en **un seul fichier** (`media/ai-map.mjs`). Il
+n'importe que trois modules Node :
+
+```js
+import fs   from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+```
+
+Aucun `http`, aucun `net`, aucun `fetch` — vous pouvez le vérifier d'un `grep`.
+Un module qui ne peut pas ouvrir de socket ne peut rien envoyer.
+
+| Affirmation | Comment la contrôler |
+|---|---|
+| Aucune dépendance | `package.json` → `"dependencies": {}` |
+| Aucun appel réseau | les trois imports ci-dessus sont les seuls du moteur |
+| Aucune télémétrie | conséquence directe : pas de réseau, pas d'envoi |
+| Ne lit pas votre code | les liens viennent des chemins **cités** dans vos configs ; seule leur existence est testée |
+| N'écrit que sur demande | **deux** écritures dans tout le code, déclenchées par vous |
+
+Ces deux écritures sont : *Enregistrer le rapport HTML…* (vous choisissez où) et
+le bouton **« Créer un CLAUDE.md »** de l'état vide, qui demande confirmation et
+n'écrase jamais un fichier existant.
+
+Le code est sous licence MIT, intégralement public :
+**[github.com/GobinaMbale/ai-map](https://github.com/GobinaMbale/ai-map)**
+
+Le fichier `media/ai-map.mjs` embarqué dans ce paquet est généré depuis `src/`
+par `node build.mjs` — vous pouvez le régénérer et comparer.
+
 ## Compatibilité
 
 `engines.vscode ^1.75.0`. Fonctionne aussi dans les éditeurs qui embarquent
