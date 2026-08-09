@@ -1,11 +1,26 @@
 (function(){
   var root = document.getElementById('app');
 
+  // DATA est la charge utile du rapport ; M est le modèle actuellement
+  // affiché. En mono-projet ils sont confondus. En workspace, M devient le
+  // modèle du projet ouvert — tout le rendu existant fonctionne alors sans
+  // savoir qu'il est imbriqué.
+  var M = DATA;
+  var byId = {};
+  // Le modèle workspace n'a pas d'entités propres : elles appartiennent aux
+  // projets. L'index reste alors vide, ce qui est exact plutôt que commode.
+  function setModel(m){
+    M = m; byId = {};
+    (M.entities||[]).forEach(function(e){ byId[e.id]=e; });
+    seedEdgeTypes();
+  }
+
   // Deux dimensions de filtrage — c'est la différence structurante avec une
   // carte mono-écosystème : on filtre par TYPE d'entité et par ÉCOSYSTÈME.
   // `tab` découpe le rapport : tout empiler dans un seul défilement rendait la
   // page illisible dès qu'un projet dépassait quelques dizaines d'entités.
-  var state = { q:'', kind:'all', source:'all', tab:'overview', detail:null, impact:null };
+  var state = { q:'', kind:'all', source:'all', tab:'overview', detail:null, impact:null,
+                project:null, dv:'diverged' };
 
   var TABS = [
     { key:'overview',   icon:'▦', label:'Vue d\'ensemble' },
@@ -16,6 +31,35 @@
     { key:'entities',   icon:'📇', label:'Entités' },
     { key:'tree',       icon:'🌳', label:'Fichiers' },
   ];
+
+  // Au niveau portefeuille on ne montre QUE ce qui n'a de sens qu'à ce niveau.
+  // Cumuler les 500 entités de six projets ne dit rien à personne ; ce qui se
+  // lit ici, c'est le rang des projets entre eux et ce qui les sépare.
+  var WS_TABS = [
+    { key:'portfolio',   icon:'🗂', label:'Portefeuille' },
+    { key:'divergences', icon:'🔀', label:'Divergences' },
+  ];
+
+  function isWorkspace(){ return DATA.workspace===true; }
+  function inProject(){ return isWorkspace() && !!state.project; }
+  function activeTabs(){ return (isWorkspace() && !state.project) ? WS_TABS : TABS; }
+
+  // Ouvrir un projet, c'est simplement changer de modèle : tout le rendu
+  // mono-projet s'applique ensuite sans savoir qu'il est imbriqué.
+  function openProject(id){
+    if(!DATA.models[id]) return;
+    state.project=id; state.tab='overview';
+    state.detail=null; state.impact=null;
+    state.kind='all'; state.source='all'; state.q='';
+    setModel(DATA.models[id]);
+    render(); window.scrollTo(0,0);
+  }
+
+  function backToPortfolio(){
+    state.project=null; state.tab='portfolio'; state.detail=null;
+    setModel(DATA);
+    render(); window.scrollTo(0,0);
+  }
 
   // ----- Rôles dans le fil d'impact -----------------------------------------
   // Le fil se lit toujours dans le même sens : ce qui PRESCRIT → ce qui AGIT →
@@ -32,12 +76,11 @@
   function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
   function esc(s){ return String(s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];}); }
 
-  function kindOf(key){ return DATA.kindDict[key] || { label:key, one:key, icon:'•', color:'#94a3b8' }; }
+  function kindOf(key){ return M.kindDict[key] || { label:key, one:key, icon:'•', color:'#94a3b8' }; }
   function srcOf(id){
-    for(var i=0;i<DATA.sources.length;i++){ if(DATA.sources[i].id===id) return DATA.sources[i]; }
+    for(var i=0;i<M.sources.length;i++){ if(M.sources[i].id===id) return M.sources[i]; }
     return { id:id, label:id, icon:'•', color:'#94a3b8' };
   }
-  var byId = {}; DATA.entities.forEach(function(e){ byId[e.id]=e; });
 
   // ---------------------------------------------------------------- rendu --
   // Ossature de la page : elle ne change jamais. Seul le contenu de l'onglet
@@ -48,11 +91,33 @@
 
     var head = el('header','top');
     var titleBox = el('div','title');
-    var h1 = el('h1'); h1.textContent='AI-MAP — '+DATA.project;
-    var detected = DATA.sources.filter(function(s){ return s.detected; });
+
+    // Dans un workspace, l'en-tête sert aussi de fil d'Ariane : sans lui on ne
+    // sait plus si le score affiché est celui du portefeuille ou d'un projet.
+    if(inProject()){
+      var crumb = el('div','crumb');
+      // « ← Portefeuille » plutôt que le nom du workspace : quand un projet
+      // porte le même nom que la racine, « ← eda / eda » ne disait rien.
+      var back = el('button','crumb-back','← Portefeuille');
+      back.onclick=backToPortfolio;
+      crumb.appendChild(back);
+      crumb.appendChild(el('span','crumb-sep','/'));
+      crumb.appendChild(el('span','crumb-here', state.project));
+      titleBox.appendChild(crumb);
+    }
+
+    var h1 = el('h1');
+    h1.textContent = 'AI-MAP — ' + (inProject() ? M.project : DATA.project);
     var sub = el('div','sub');
-    sub.textContent = detected.length+' écosystème(s) · '+DATA.totals.entities+' entités · '
-      +DATA.totals.edges+' relations · '+new Date(DATA.generatedAt).toLocaleDateString();
+    if(isWorkspace() && !state.project){
+      sub.textContent = DATA.totals.projects+' projets · '+DATA.totals.entities+' entités · '
+        +DATA.totals.misaligned+' écart(s) à réaligner · '
+        +new Date(DATA.generatedAt).toLocaleDateString();
+    } else {
+      var detected = M.sources.filter(function(s){ return s.detected; });
+      sub.textContent = detected.length+' écosystème(s) · '+M.totals.entities+' entités · '
+        +M.totals.edges+' relations · '+new Date(M.generatedAt).toLocaleDateString();
+    }
     titleBox.appendChild(h1); titleBox.appendChild(sub);
     var themeBtn = el('button','btn','◐ Thème'); themeBtn.onclick=toggleTheme;
     head.appendChild(titleBox); head.appendChild(themeBtn);
@@ -73,7 +138,7 @@
 
   function buildTabs(){
     var bar = el('nav','tabs');
-    TABS.forEach(function(t){
+    activeTabs().forEach(function(t){
       var b = el('button','tab'+(state.tab===t.key?' on':''));
       b.appendChild(el('span','ticon',t.icon));
       b.appendChild(document.createTextNode(t.label));
@@ -86,9 +151,14 @@
   }
 
   function tabCount(key){
-    if(key==='entities') return DATA.totals.entities;
-    if(key==='graph') return DATA.totals.edges;
-    if(key==='overview') return DATA.totals.sources;
+    if(key==='portfolio') return DATA.totals.projects;
+    // Le badge compte ce qui CLOCHE, pas ce qui est partagé : afficher 23 à
+    // côté de « Divergences » alors que l'en-tête annonce « 0 divergence » se
+    // lisait comme 23 divergences.
+    if(key==='divergences') return DATA.totals.misaligned || null;
+    if(key==='entities') return M.totals.entities;
+    if(key==='graph') return M.totals.edges;
+    if(key==='overview') return M.totals.sources;
     return null;
   }
 
@@ -102,7 +172,13 @@
 
     if(state.detail && byId[state.detail]){ c.appendChild(buildDetailPage(byId[state.detail])); return; }
 
+    if(state.tab==='portfolio'){ c.appendChild(buildPortfolio()); return; }
+    if(state.tab==='divergences'){ c.appendChild(buildDivergences()); return; }
+
     if(state.tab==='overview'){
+      // Le rapport se lit aussi hors de VS Code. Sans cette note, son score se
+      // lit comme celui de TOUT le dossier alors qu'il ne couvre qu'un projet.
+      if(M.nearby && M.nearby.count > 1) c.appendChild(buildNearbyNote());
       // Deux colonnes en tête : le score en grand à gauche, ce qui cloche à
       // droite. C'est la seule chose qu'on doit voir sans faire défiler.
       var top = el('div','dash-top');
@@ -151,6 +227,352 @@
 
   function h2(t){ var h=el('h2'); h.textContent=t; return h; }
 
+  // Le rapport ne peut pas ouvrir le portefeuille lui-même : il est hors ligne
+  // et ne sait pas relancer l'analyse. Il donne donc la commande exacte —
+  // afficher un bouton mort serait pire que ne rien afficher.
+  function buildNearbyNote(){
+    var box = el('div','near-note');
+    var txt = el('div');
+    txt.appendChild(el('strong',null, String(M.nearby.count)));
+    txt.appendChild(document.createTextNode(
+      ' projets IA sous ce dossier — cette carte n\'en couvre qu\'un.'));
+    box.appendChild(txt);
+    var others = el('div','near-list', M.nearby.others.slice(0,6).join(' · ')
+      + (M.nearby.others.length>6 ? ' …' : ''));
+    box.appendChild(others);
+    box.appendChild(el('code','near-cmd','ai-map . --workspace'));
+    return box;
+  }
+
+  // ============================================================ portefeuille ==
+  // Ce niveau répond à deux questions, et à aucune autre : « quel projet est le
+  // plus en retard ? » et « qu'est-ce qui devrait être identique et ne l'est
+  // plus ? ». Tout le reste appartient au projet et se lit en y descendant.
+
+  // maturity() et governanceAlerts() lisent le modèle courant. Plutôt que de
+  // les paramétrer — ce qui toucherait tout le rendu — on permute le temps du
+  // calcul. Le rétablissement est en `finally` : une exception d'adaptateur ne
+  // doit pas laisser l'application pointée sur le mauvais projet.
+  // On permute M directement, sans passer par setModel() : celui-ci réamorce
+  // aussi les filtres du graphe, qu'un simple calcul de score n'a pas à
+  // réinitialiser. Le rétablissement est en `finally` — une exception ne doit
+  // pas laisser l'application pointée sur le mauvais projet.
+  function withModel(m, fn){
+    var prev = M, prevIdx = byId;
+    M = m; byId = {};
+    (m.entities||[]).forEach(function(e){ byId[e.id]=e; });
+    try { return fn(); } finally { M = prev; byId = prevIdx; }
+  }
+
+  var wsScoreCache = null;
+  function wsScores(){
+    if(wsScoreCache) return wsScoreCache;
+    wsScoreCache = {};
+    DATA.projects.forEach(function(p){
+      wsScoreCache[p.id] = withModel(DATA.models[p.id], function(){
+        var mat = maturity();
+        return { score: mat ? mat.score : null, alerts: governanceAlerts().length };
+      });
+    });
+    return wsScoreCache;
+  }
+
+  // Les trois familles réunies, chacune portant sa gravité. Une divergence est
+  // un fait ; une copie conforme est une information de contexte.
+  function wsIssues(){
+    var d = DATA.divergences;
+    return [].concat(
+      d.diverged.map(function(x){ return { type:'diverged', item:x }; }),
+      d.gaps.map(function(x){ return { type:'gap', item:x }; }),
+      d.duplicated.map(function(x){ return { type:'duplicated', item:x }; })
+    );
+  }
+
+  function scoreTone(s){
+    if(s==null) return '#94a3b8';
+    return s>=75 ? '#22c55e' : (s>=50 ? '#f59e0b' : '#ef4444');
+  }
+
+  function buildPortfolio(){
+    var box = el('div');
+    var scores = wsScores();
+
+    // Bandeau : seulement des grandeurs de portefeuille. Le nombre d'entités
+    // cumulées n'est pas un indicateur de qualité — il dit juste la taille.
+    var band = el('div','kpi-band');
+    function cell(label, value, note, color){
+      var c = el('div','kpi-cell');
+      c.appendChild(el('div','kc-label', label));
+      var v = el('div','kc-value');
+      var n = el('span','kc-n', String(value));
+      if(color) n.style.color=color;
+      v.appendChild(n);
+      if(note) v.appendChild(el('span','kc-note', note));
+      c.appendChild(v); return c;
+    }
+    var rated = DATA.projects.map(function(p){ return scores[p.id].score; })
+      .filter(function(s){ return s!=null; });
+    var avg = rated.length ? Math.round(rated.reduce(function(a,b){return a+b;},0)/rated.length) : null;
+    var spread = rated.length>1 ? Math.max.apply(null,rated)-Math.min.apply(null,rated) : 0;
+
+    band.appendChild(cell('Projets cartographiés', DATA.totals.projects, 'écosystèmes IA'));
+    band.appendChild(cell('Maturité moyenne', avg==null?'—':avg,
+      rated.length>1 ? ('écart de '+spread+' pts') : 'sur 100', scoreTone(avg)));
+    band.appendChild(cell('Artefacts partagés', DATA.totals.duplicated + DATA.totals.diverged,
+      'entre projets'));
+    band.appendChild(cell('Écarts à réaligner', DATA.totals.misaligned,
+      DATA.totals.misaligned
+        ? (DATA.totals.diverged + ' divergence(s) · ' + DATA.totals.gaps + ' convention(s)')
+        : 'tout est aligné',
+      DATA.totals.misaligned ? '#f59e0b' : '#22c55e'));
+    box.appendChild(band);
+
+    box.appendChild(el('div','sec-label','Projets — les moins matures en premier'));
+
+    // Le tri place en tête ce qui demande une action. Un classement par nom
+    // serait neutre, donc inutile : il faudrait lire les six fiches.
+    var ordered = DATA.projects.slice().sort(function(a,b){
+      var sa = scores[a.id].score, sb = scores[b.id].score;
+      if(sa==null) return 1;
+      if(sb==null) return -1;
+      return sa-sb || b.entities-a.entities;
+    });
+
+    var grid = el('div','proj-grid');
+    var issues = wsIssues();
+    var dupNames = {};
+    DATA.projects.forEach(function(p){ dupNames[p.name] = (dupNames[p.name]||0)+1; });
+    ordered.forEach(function(p){
+      var s = scores[p.id];
+      var card = el('button','proj-card');
+      card.onclick=function(){ openProject(p.id); };
+
+      var head = el('div','pc-head');
+      var names = el('div','pc-names');
+      names.appendChild(el('div','pc-name', p.name));
+      // Deux dépôts peuvent porter le même nom de dossier : sans le chemin, les
+      // deux fiches seraient indiscernables. On le montre dès qu'il apporte
+      // quelque chose — ou dès que le nom seul ne suffit plus.
+      if(p.rel && p.rel!=='.' && (p.rel!==p.name || dupNames[p.name]>1)){
+        names.appendChild(el('div','pc-path', p.rel));
+      }
+      head.appendChild(names);
+
+      var ring = el('div','pc-score');
+      ring.style.setProperty('--tone', scoreTone(s.score));
+      ring.appendChild(el('span','pc-num', s.score==null?'—':String(s.score)));
+      head.appendChild(ring);
+      card.appendChild(head);
+
+      var chips = el('div','pc-chips');
+      p.sources.forEach(function(id){
+        var src = null;
+        (DATA.models[p.id].sources||[]).forEach(function(x){ if(x.id===id) src=x; });
+        var chip = el('span','pc-chip', (src?src.icon+' ':'')+(src?src.label:id));
+        if(src) chip.style.borderColor = src.color;
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+
+      var stats = el('div','pc-stats');
+      function stat(n, label, tone){
+        var b = el('span','pc-stat');
+        var v = el('b',null,String(n)); if(tone) v.style.color=tone;
+        b.appendChild(v); b.appendChild(document.createTextNode(' '+label));
+        return b;
+      }
+      // Le nombre de liens transverses dit si les outils se parlent — c'est la
+      // seule mesure de portefeuille qui distingue une config vivante d'un
+      // empilement de dossiers.
+      stats.appendChild(stat(p.entities, 'entités'));
+      stats.appendChild(stat(p.cross, 'transverses'));
+      stats.appendChild(stat(s.alerts, 'alertes', s.alerts?'#f59e0b':'#22c55e'));
+      card.appendChild(stats);
+
+      var shared = issues.filter(function(i){
+        return i.item.projects.indexOf(p.id)>=0 || (i.item.missing||[]).indexOf(p.id)>=0;
+      });
+      var div = shared.filter(function(i){ return i.type==='diverged'; }).length;
+      var foot = el('div','pc-foot');
+      foot.textContent = div
+        ? (div + ' artefact(s) divergent(s) avec les autres projets')
+        : (shared.length ? shared.length+' artefact(s) partagé(s), tous alignés'
+                         : 'aucun artefact partagé');
+      if(div) foot.classList.add('warn');
+      card.appendChild(foot);
+
+      grid.appendChild(card);
+    });
+    box.appendChild(grid);
+    return box;
+  }
+
+  // ------------------------------------------------------------ divergences --
+  function buildDivergences(){
+    var box = el('div');
+    var all = wsIssues();
+
+    if(!all.length){
+      var empty = el('div','ws-empty');
+      empty.appendChild(el('div','wse-icon','✓'));
+      empty.appendChild(el('div','wse-title','Aucun artefact partagé entre les projets'));
+      empty.appendChild(el('div','wse-note',
+        'Chaque projet a ses propres skills, commandes et règles. Rien à réaligner — '
+        + 'mais rien n\'est mutualisé non plus.'));
+      box.appendChild(empty);
+      return box;
+    }
+
+    var counts = { diverged:0, gap:0, duplicated:0 };
+    all.forEach(function(i){ counts[i.type]++; });
+
+    var FAMILIES = [
+      { key:'diverged',   label:'Ont divergé',        note:'même nom, contenus différents' },
+      { key:'gap',        label:'Écarts de convention', note:'adopté par la majorité, absent ailleurs' },
+      { key:'duplicated', label:'Copies alignées',    note:'identiques partout' },
+    ];
+
+    var bar = el('div','dv-filters');
+    FAMILIES.forEach(function(f){
+      if(!counts[f.key]) return;                       // pas de filtre vide
+      var b = el('button','dv-pill'+(state.dv===f.key?' on':''));
+      b.appendChild(document.createTextNode(f.label));
+      b.appendChild(el('span','dv-n', String(counts[f.key])));
+      b.onclick=function(){ state.dv=f.key; renderTab(); };
+      bar.appendChild(b);
+    });
+    box.appendChild(bar);
+
+    // Si la famille sélectionnée est vide, on retombe sur la plus grave qui ne
+    // l'est pas — sinon l'onglet s'ouvre sur une page blanche.
+    if(!counts[state.dv]){
+      for(var i=0;i<FAMILIES.length;i++){ if(counts[FAMILIES[i].key]){ state.dv=FAMILIES[i].key; break; } }
+    }
+    // Quand rien ne cloche, on le dit — sinon la page s'ouvre sur une longue
+    // liste de copies conformes que l'on lit comme un problème.
+    if(!counts.diverged && !counts.gap){
+      var ok = el('div','dv-ok');
+      ok.appendChild(el('span','dv-ok-icon','✓'));
+      ok.appendChild(el('span',null,
+        'Tout ce qui est partagé entre ces projets est identique. '
+        + 'Aucun réalignement à faire.'));
+      box.appendChild(ok);
+    }
+
+    var fam = FAMILIES.filter(function(f){ return f.key===state.dv; })[0];
+    box.appendChild(el('div','sec-label', fam.label + ' — ' + fam.note));
+
+    var rows = all.filter(function(i){ return i.type===state.dv; });
+    var list = el('div','dv-list');
+
+    if(state.dv==='duplicated'){
+      // Vingt-trois lignes « 2/6 projets » ne se lisent pas. Regroupées par
+      // ensemble de projets, elles disent enfin quelque chose : QUELS projets
+      // partagent une même lignée de configuration, et sur combien d'objets.
+      buildSharedGroups(rows).forEach(function(g){ list.appendChild(g); });
+    } else {
+      rows.forEach(function(i){ list.appendChild(buildDivergenceRow(i)); });
+    }
+    box.appendChild(list);
+    return box;
+  }
+
+  function buildSharedGroups(rows){
+    var groups = [], index = {};
+    rows.forEach(function(i){
+      var key = JSON.stringify(i.item.projects.slice().sort());
+      if(!index[key]){ index[key] = { projects:i.item.projects.slice().sort(), items:[] }; groups.push(index[key]); }
+      index[key].items.push(i.item);
+    });
+    groups.sort(function(a,b){ return b.items.length-a.items.length; });
+
+    return groups.map(function(g){
+      var row = el('div','dv-row');
+      var head = el('div','dv-head');
+      var chips = el('div','dv-chips');
+      g.projects.forEach(function(id){ chips.appendChild(projChip(id)); });
+      head.appendChild(chips);
+      head.appendChild(el('span','dv-spread', g.items.length + ' artefact(s) en commun'));
+      row.appendChild(head);
+
+      var body = el('div','dv-shared');
+      g.items.slice().sort(function(a,b){ return a.name.localeCompare(b.name); })
+        .forEach(function(x){
+          var k = kindOf(x.kind);
+          var tag = el('span','dv-art');
+          var ic = el('span','dv-art-ic', k.icon); ic.style.color = k.color;
+          tag.appendChild(ic);
+          tag.appendChild(document.createTextNode(x.name));
+          tag.title = (k.one||k.label) + ' — identique dans ' + g.projects.join(', ');
+          body.appendChild(tag);
+        });
+      row.appendChild(body);
+      return row;
+    });
+  }
+
+  var VARIANT_LABELS = 'ABCDEFGH';
+
+  function buildDivergenceRow(issue){
+    var x = issue.item;
+    var k = kindOf(x.kind);
+    var row = el('div','dv-row'+(issue.type==='diverged'?' bad':''));
+
+    var head = el('div','dv-head');
+    var ic = el('span','dv-icon', k.icon); ic.style.color=k.color;
+    head.appendChild(ic);
+    head.appendChild(el('span','dv-name', x.name));
+    head.appendChild(el('span','dv-kind', k.one||k.label));
+    head.appendChild(el('span','dv-spread',
+      x.projects.length + '/' + DATA.totals.projects + ' projets'));
+    row.appendChild(head);
+
+    if(issue.type==='gap'){
+      // L'information utile n'est pas « qui l'a » mais « qui ne l'a pas » :
+      // ce sont les exceptions à interroger.
+      var miss = el('div','dv-missing');
+      miss.appendChild(el('span','dv-lbl','Absent de'));
+      x.missing.forEach(function(id){ miss.appendChild(projChip(id, true)); });
+      row.appendChild(miss);
+      return row;
+    }
+
+    // Regroupement par empreinte : ce qui compte est de savoir QUELS projets
+    // sont d'accord entre eux, pas de lister N chemins à la file.
+    var groups = [];
+    x.occurrences.forEach(function(o){
+      var g = null;
+      groups.forEach(function(c){ if(c.print===o.print) g=c; });
+      if(!g){ g={ print:o.print, occ:[] }; groups.push(g); }
+      g.occ.push(o);
+    });
+    groups.sort(function(a,b){ return b.occ.length-a.occ.length; });
+
+    var vars = el('div','dv-variants');
+    groups.forEach(function(g, gi){
+      var v = el('div','dv-variant');
+      if(groups.length>1){
+        var tag = el('span','dv-vtag','Variante '+VARIANT_LABELS[gi]);
+        if(gi===0) tag.classList.add('ref');       // la plus répandue fait référence
+        v.appendChild(tag);
+      }
+      var chips = el('div','dv-chips');
+      g.occ.forEach(function(o){ chips.appendChild(projChip(o.project, false, o.path)); });
+      v.appendChild(chips);
+      vars.appendChild(v);
+    });
+    row.appendChild(vars);
+    return row;
+  }
+
+  function projChip(id, missing, title){
+    var c = el('button','dv-chip'+(missing?' miss':''), id);
+    if(title) c.title = title;
+    if(!missing) c.onclick=function(){ openProject(id); };
+    else c.disabled = true;
+    return c;
+  }
+
   // ------------------------------------------------------- tableau de bord --
   // Bandeau d'en-tête : libellé en petites capitales, chiffre en grand, et une
   // précision discrète à côté. Quatre indicateurs maximum — au-delà, plus aucun
@@ -169,14 +591,14 @@
       return c;
     }
     var mat = maturity();
-    var cross = (DATA.graph.edges||[]).filter(function(e){ return e.cross; }).length;
+    var cross = ((M.graph||{}).edges||[]).filter(function(e){ return e.cross; }).length;
     var alerts = governanceAlerts().length;
 
-    band.appendChild(cell('Types recensés', DATA.totals.kinds, 'catégories'));
-    band.appendChild(cell('Entités cartographiées', DATA.totals.entities,
-      DATA.totals.sources + ' écosystèmes'));
+    band.appendChild(cell('Types recensés', M.totals.kinds, 'catégories'));
+    band.appendChild(cell('Entités cartographiées', M.totals.entities,
+      M.totals.sources + ' écosystèmes'));
     band.appendChild(cell('Liens transverses tracés', cross,
-      'sur ' + DATA.totals.edges));
+      'sur ' + M.totals.edges));
     band.appendChild(cell('Alertes de gouvernance', alerts,
       alerts ? 'à traiter' : 'aucune', alerts ? '#f59e0b' : '#22c55e'));
     return band;
@@ -189,9 +611,9 @@
     var wrap = el('div');
     wrap.appendChild(el('div','sec-label','Composants IA détectés'));
     var grid = el('div','tiles');
-    DATA.kinds.forEach(function(k){
+    M.kinds.forEach(function(k){
       var sources = {};
-      DATA.entities.forEach(function(e){ if(e.kind===k.key) sources[e.source]=1; });
+      M.entities.forEach(function(e){ if(e.kind===k.key) sources[e.source]=1; });
       var names = Object.keys(sources).map(function(id){ return srcOf(id).label; });
 
       var t = el('div','tile');
@@ -218,7 +640,7 @@
     hint.textContent='Les écosystèmes grisés ne sont pas encore couverts par un adaptateur : leur absence ici ne signifie pas qu\'ils sont absents du projet.';
     p.appendChild(hint);
     var grid = el('div','srcs');
-    DATA.sources.forEach(function(s){
+    M.sources.forEach(function(s){
       var d = el('div','src'+(s.detected?'':' off'));
       d.style.borderLeftColor = s.color;
       var n = el('div','sname');
@@ -248,8 +670,8 @@
     p.appendChild(h2('📊 Répartition par type d\'entité'));
     var bars = el('div','bars');
     var max = 1;
-    DATA.kinds.forEach(function(k){ if(k.count>max) max=k.count; });
-    DATA.kinds.forEach(function(k){
+    M.kinds.forEach(function(k){ if(k.count>max) max=k.count; });
+    M.kinds.forEach(function(k){
       var row=el('div','bar-row');
       var name=el('div','name');
       var dot=el('span','dot'); dot.style.background=k.color;
@@ -275,7 +697,7 @@
     var p = el('div','panel');
     p.appendChild(h2('🕰️ Timeline'));
 
-    var dated = DATA.entities.filter(function(e){ return e.mtime; })
+    var dated = M.entities.filter(function(e){ return e.mtime; })
       .slice().sort(function(a,b){ return a.mtime < b.mtime ? 1 : -1; });
     if(!dated.length){
       p.appendChild(el('div','empty','Aucune date de modification disponible.'));
@@ -387,19 +809,44 @@
   // avec leur définition. Un score opaque serait invérifiable, donc inutile
   // pour arbitrer quoi que ce soit.
   function maturity(){
-    var ents = DATA.entities;
-    var edges = DATA.graph.edges || [];
+    var ents = M.entities;
+    var edges = (M.graph||{}).edges || [];
     if(!ents.length) return null;
 
     var degree = {};
     edges.forEach(function(e){ degree[e.s]=1; degree[e.t]=1; });
     var linked = ents.filter(function(e){ return degree[e.id]; }).length / ents.length;
 
+    // TRAÇABILITÉ = « ce qu'un acteur annonce toucher se vérifie-t-il ? »
+    //
+    // Ce n'est PAS « touche-t-il du code ». Trois usages parfaitement sains le
+    // démentent : une skill qui pilote Jira via un serveur MCP (cible distante,
+    // vérifiable dans .mcp.json), une skill qui décrit une procédure — traiter
+    // des images, relire une PR — et qui ne touche rien de vérifiable, et une
+    // commande purement conversationnelle.
+    //
+    // On ne mesure donc que les acteurs qui ANNONCENT une cible. Ceux qui n'en
+    // annoncent aucune sortent du dénominateur : leur reprocher l'absence d'un
+    // lien qu'ils n'ont jamais prétendu avoir serait un reproche inventé.
     var actors = ents.filter(function(e){ return ACTOR_KINDS[e.kind]; });
-    var withCode = {};
-    edges.forEach(function(e){ if(e.type==='code') withCode[e.s]=1; });
-    var traced = actors.length
-      ? actors.filter(function(e){ return withCode[e.id]; }).length / actors.length : null;
+    var toCode = {}, toService = {}, toVague = {};
+    edges.forEach(function(e){
+      if(e.type==='code'){ toCode[e.s]=1; return; }
+      if(e.type!=='tool') return;
+      // Serveur MCP déclaré = cible vérifiable ; outil générique = invérifiable.
+      if(byId[e.t] && byId[e.t].kind==='mcp') toService[e.s]=1;
+      else toVague[e.s]=1;
+    });
+
+    var claimed = function(e){
+      var l = e.links || {};
+      return ((l.code||[]).length + (l.files||[]).length + (l.tools||[]).length) > 0;
+    };
+    var isTraced = function(e){ return !!(toCode[e.id] || toService[e.id]); };
+
+    var claimants = actors.filter(claimed);
+    var traced = claimants.length
+      ? claimants.filter(isTraced).length / claimants.length : null;
 
     var dated = ents.filter(function(e){ return e.mtime; });
     var limit = Date.now() - 90*86400000;
@@ -415,7 +862,13 @@
       { key:'linked', label:'Connexion',    value:linked,
         desc:'part des entités reliées à au moins une autre — le reste est isolé' },
       { key:'traced', label:'Traçabilité',  value:traced,
-        desc:'part des skills, commandes et agents qui pointent vers du code réel' },
+        desc:'parmi ceux qui annoncent une cible, part dont la cible se vérifie '
+            +'— fichier existant ou serveur MCP déclaré',
+        scope: claimants.length + ' acteur(s) sur ' + actors.length + ' annoncent une cible'
+             + (actors.length > claimants.length
+                ? ' · ' + (actors.length - claimants.length)
+                  + ' hors périmètre (procédures, revues, styles)'
+                : '') },
       { key:'fresh',  label:'Fraîcheur',    value:fresh,
         desc:'part des entités modifiées depuis moins de 90 jours' },
       { key:'clean',  label:'Hygiène',      value:clean,
@@ -431,7 +884,19 @@
         total: ents.length,
         isolated: ents.filter(function(e){ return !degree[e.id]; }),
         actors: actors,
-        untraced: actors.filter(function(e){ return !withCode[e.id]; }),
+        claimants: claimants,
+        untraced: claimants.filter(function(e){ return !isTraced(e); }),
+        // Deux causes distinctes derrière une cible annoncée mais invérifiable,
+        // donc deux remèdes opposés : corriger un chemin, ou déclarer un outil.
+        brokenPath: claimants.filter(function(e){
+          return !isTraced(e) && ((e.links.code||[]).length + (e.links.files||[]).length) > 0;
+        }),
+        vagueTool: claimants.filter(function(e){
+          return !isTraced(e) && !((e.links.code||[]).length + (e.links.files||[]).length)
+            && (e.links.tools||[]).length > 0;
+        }),
+        // Ni cible annoncée ni reproche : procédures, revues, styles.
+        selfContained: actors.filter(function(e){ return !claimed(e); }),
         dated: dated.length,
         stale: dated.filter(function(e){ return Date.parse(e.mtime) < limit; }),
         alerted: ents.filter(function(e){ return e.tone==='warn'||e.tone==='danger'; }),
@@ -456,13 +921,32 @@
     var r = m.raw;
     var out = [];
 
-    if(r.untraced.length){
+    // Une skill qui pilote un service distant ne touchera JAMAIS de code : lui
+    // demander de citer des fichiers est un conseil inapplicable. Le remède est
+    // de déclarer le serveur MCP qu'elle utilise, ce qui rend sa cible
+    // vérifiable dans .mcp.json.
+    if(r.brokenPath.length){
       out.push({
-        label: 'Relier ' + r.untraced.length + ' skill(s), commande(s) ou agent(s) à des fichiers de code réels',
-        why: 'Ils ne citent aucun chemin existant : impossible de savoir ce qu\'ils touchent.',
+        label: 'Corriger les chemins cités par ' + r.brokenPath.length + ' skill(s), commande(s) ou agent(s)',
+        why: 'Ils citent des fichiers qui n\'existent pas depuis la racine analysée : '
+           + 'chemins périmés, ou fichier placé au mauvais niveau du dépôt.',
         component: 'Traçabilité',
-        points: pointsFor(m, 'traced', r.untraced.length, r.actors.length),
-        items: r.untraced,
+        points: pointsFor(m, 'traced', r.brokenPath.length, r.claimants.length),
+        items: r.brokenPath,
+      });
+    }
+
+    // Une skill qui pilote un service distant ne touchera jamais de code : lui
+    // demander de citer des fichiers serait inapplicable. Le remède est de
+    // déclarer le serveur MCP, ce qui rend sa cible vérifiable.
+    if(r.vagueTool.length){
+      out.push({
+        label: 'Déclarer les outils de ' + r.vagueTool.length + ' skill(s) ou agent(s)',
+        why: 'Ils annoncent des outils qui ne correspondent à aucun serveur MCP déclaré : '
+           + 'leur cible existe peut-être, mais rien ne permet de le vérifier.',
+        component: 'Traçabilité',
+        points: pointsFor(m, 'traced', r.vagueTool.length, r.claimants.length),
+        items: r.vagueTool,
       });
     }
 
@@ -492,13 +976,34 @@
       });
     }
 
-    if(r.isolated.length){
+    // Proposer de SUPPRIMER ce qui n'est pas cité n'a de sens que pour les
+    // objets qui n'existent que pour être cités. Un hook, une skill ou une
+    // règle ne le sont jamais : les ranger ici conseillait de supprimer une
+    // configuration parfaitement active.
+    var orphans = r.isolated.filter(function(e){ return activationOf(e.kind)==='ref'; });
+    if(orphans.length){
       out.push({
-        label: 'Référencer ou supprimer ' + r.isolated.length + ' entité(s) isolée(s)',
-        why: 'Rien ne les cite et elles ne touchent aucun code : ce sont des candidates à la suppression.',
+        label: 'Référencer ou archiver ' + orphans.length + ' entité(s) jamais citée(s)',
+        why: 'Ces objets ne servent que lorsqu\'ils sont référencés ; aucune '
+           + 'citation n\'a été trouvée.',
         component: 'Connexion',
-        points: pointsFor(m, 'linked', r.isolated.length, r.total),
-        items: r.isolated,
+        points: pointsFor(m, 'linked', orphans.length, r.total),
+        items: orphans,
+      });
+    }
+
+    // Le reste des entités isolées n'est pas de la dette : c'est la carte qui
+    // ne peut pas les relier. On le dit sans réclamer d'action.
+    var standalone = r.isolated.filter(function(e){ return activationOf(e.kind)!=='ref'; });
+    if(standalone.length){
+      out.push({
+        label: 'Documenter les chemins touchés par ' + standalone.length + ' élément(s) autonome(s)',
+        why: 'Hooks, règles et commandes sont activés sans être cités — leur '
+           + 'isolement dans le graphe est normal. Citer les fichiers qu\'ils '
+           + 'touchent les y raccrocherait.',
+        component: 'Connexion',
+        points: pointsFor(m, 'linked', standalone.length, r.total),
+        items: standalone,
       });
     }
 
@@ -578,6 +1083,10 @@
       track.appendChild(fill);
       row.appendChild(track);
       row.appendChild(el('div','sp-desc', part.desc));
+      // Un pourcentage sans son dénominateur n'est pas vérifiable — et surtout,
+      // il cache ce qui est HORS PÉRIMÈTRE. « 50 % » ne dit pas que la moitié
+      // des skills n'est pas concernée par la mesure.
+      if(part.scope) row.appendChild(el('div','sp-scope', part.scope));
       list.appendChild(row);
     });
     box.appendChild(list);
@@ -654,21 +1163,77 @@
   }
 
   // ------------------------------------------------- alertes de gouvernance --
+  // COMMENT une entité est activée décide de ce qu'on peut lui reprocher.
+  // « Personne ne le cite » n'a de sens que pour ce qui DOIT être cité pour
+  // servir. Un hook est déclenché par un événement, une skill par la
+  // correspondance de sa description, une commande par l'utilisateur, une règle
+  // est chargée d'office : aucun de ces objets n'est jamais « référencé », et
+  // le leur reprocher produisait une alerte fausse — vue sur le hook `Stop`.
+  var ACTIVATION = {
+    workflow:  'event',   // hook : déclenché par un événement du runtime
+    skill:     'match',   // déclenché quand sa description correspond à la tâche
+    agent:     'match',
+    command:   'user',    // invoqué explicitement par l'utilisateur
+    prompt:    'user',
+    memory:    'always',  // chargé à chaque session
+    rule:      'always',
+    knowledge: 'always',
+    config:    'always',
+  };
+  // Tout le reste (spec, requirement, change, task, document, mcp) n'existe
+  // que pour être référencé : là, l'orphelinat est un vrai signal.
+  function activationOf(kind){ return ACTIVATION[kind] || 'ref'; }
+
+  var ACTIVATION_LABEL = {
+    event:  'déclenché par un événement',
+    match:  'déclenché par sa description',
+    user:   'invoqué à la demande',
+    always: 'chargé systématiquement',
+    ref:    'utilisé lorsqu\'il est référencé',
+  };
+
   function governanceAlerts(){
     var out = [];
-    DATA.entities.forEach(function(e){
+    M.entities.forEach(function(e){
       (e.badges||[]).forEach(function(b){
         if(b.tone==='warn'||b.tone==='danger') out.push({ entity:e, badge:b });
       });
     });
-    // Les entités reliées à rien sont l'autre grand signal de dette : une skill
-    // que personne ne référence et qui ne touche aucun code ne sert plus.
+
+    // Degré TOTAL, entrant ou sortant. N'exiger qu'une arête entrante paraissait
+    // plus strict mais signalait chaque change OpenSpec : un change contient ses
+    // tâches — il a des arêtes sortantes et personne ne le cite, par
+    // construction. Participer au graphe suffit à ne pas être orphelin.
     var degree = {};
-    (DATA.graph.edges||[]).forEach(function(e){ degree[e.s]=1; degree[e.t]=1; });
-    DATA.entities.forEach(function(e){
-      if(degree[e.id]) return;
-      if(e.kind==='config') return; // un fichier de réglages n'a pas à être cité
-      out.push({ entity:e, badge:{ text:'jamais référencé, ne touche aucun code', tone:'info' } });
+    ((M.graph||{}).edges||[]).forEach(function(ed){ degree[ed.s]=1; degree[ed.t]=1; });
+
+    M.entities.forEach(function(e){
+      var mode = activationOf(e.kind);
+
+      // Ce qui n'existe que pour être cité et que rien ne relie est de la dette.
+      if(mode==='ref' && !degree[e.id]){
+        out.push({
+          entity:e, badge:{ text:'aucune entité ne le référence', tone:'info' },
+          why:'Ce type d\'objet n\'est utilisé que lorsqu\'il est cité. '
+             +'Il n\'apparaît dans aucune relation des fichiers analysés.',
+          todo:'Le citer depuis la spec ou le change qui l\'utilise, ou l\'archiver.',
+          facts:['0 relation dans le graphe', ACTIVATION_LABEL[mode]],
+        });
+        return;
+      }
+
+      // Ce qui se déclenche sur sa description ne peut pas fonctionner sans
+      // description : c'est ELLE que l'assistant lit pour décider d'agir.
+      if(mode==='match' && !String(e.description||'').trim()){
+        out.push({
+          entity:e, badge:{ text:'aucune description — ne peut pas se déclencher', tone:'warn' },
+          why:'Un objet de ce type est choisi par correspondance entre sa '
+             +'description et la tâche en cours. Sans description, il ne sera '
+             +'jamais retenu, quel que soit son contenu.',
+          todo:'Ajouter un champ `description` en frontmatter, disant QUAND l\'utiliser.',
+          facts:['description absente', ACTIVATION_LABEL[mode]],
+        });
+      }
     });
     return out;
   }
@@ -681,14 +1246,25 @@
   }
 
   // Explication de l'alerte : le badge dit CE QUE c'est, ceci dit POURQUOI.
+  // Les alertes calculées ici portent leur propre `why` ; celles produites par
+  // un adaptateur sont expliquées à partir de leur libellé.
   function alertWhy(a){
+    if(a.why) return a.why;
     var t = a.badge.text;
     if(/archiver/i.test(t)) return 'Toutes les tâches sont complètes — ce change devrait être archivé.';
-    if(/jamais référencé/i.test(t)) return 'Rien ne le cite et il ne touche aucun code : candidat à la suppression.';
     if(/aussi déclaré/i.test(t)) return 'Le même serveur est déclaré ailleurs : les deux copies vont diverger.';
     if(/hérité/i.test(t)) return 'Ce format est remplacé par le format moderne, présent dans le même projet.';
     if(/illisible|invalide|non reconnu/i.test(t)) return 'Le fichier existe mais n\'a pas pu être analysé.';
     return a.badge.text;
+  }
+
+  function alertTodo(a){
+    if(a.todo) return a.todo;
+    var t = a.badge.text;
+    if(/archiver/i.test(t)) return 'Déplacer ce change vers `archive/`.';
+    if(/aussi déclaré/i.test(t)) return 'Ne garder qu\'une déclaration, ou aligner les deux.';
+    if(/hérité/i.test(t)) return 'Migrer le contenu vers le format moderne, puis supprimer l\'ancien fichier.';
+    return null;
   }
 
   // Fiche d'alerte : icône, nom, badges, motif coloré, explication, chemin,
@@ -714,6 +1290,24 @@
     body.appendChild(el('div','ac-reason', a.badge.text));
     if(!compact){
       body.appendChild(el('div','ac-why', alertWhy(a)));
+
+      // SUR QUOI l'alerte se fonde. Sans ces faits, on ne peut ni la vérifier
+      // ni la contester — on doit croire l'outil sur parole.
+      if(a.facts && a.facts.length){
+        var facts = el('div','ac-facts');
+        facts.appendChild(el('span','ac-flabel','Constaté'));
+        a.facts.forEach(function(f){ facts.appendChild(el('span','ac-fact', f)); });
+        body.appendChild(facts);
+      }
+
+      var todo = alertTodo(a);
+      if(todo){
+        var act = el('div','ac-todo');
+        act.appendChild(el('span','ac-flabel','À faire'));
+        act.appendChild(el('span',null, todo));
+        body.appendChild(act);
+      }
+
       if(a.entity.path) body.appendChild(el('div','ac-path', a.entity.path));
     }
     card.appendChild(body);
@@ -790,11 +1384,11 @@
   // mais on ne peut pas la lire : ici on la lit.
   function impactChains(){
     var nodeById = {};
-    (DATA.graph.nodes||[]).forEach(function(n){ nodeById[n.id]=n; });
-    var edges = DATA.graph.edges||[];
+    ((M.graph||{}).nodes||[]).forEach(function(n){ nodeById[n.id]=n; });
+    var edges = (M.graph||{}).edges||[];
 
     var chains = [];
-    DATA.entities.filter(function(e){ return ACTOR_KINDS[e.kind]; }).forEach(function(actor){
+    M.entities.filter(function(e){ return ACTOR_KINDS[e.kind]; }).forEach(function(actor){
       var origins = [], targets = [];
       var seenTarget = {};
       edges.forEach(function(ed){
@@ -933,7 +1527,7 @@
     // Le rôle précise l'écosystème quand il y en a plusieurs : « SKILL » seul
     // ne dit pas d'où vient la skill dans un projet multi-outils.
     var role = k.one.toUpperCase();
-    if(entity && DATA.totals.sources > 1) role += ' · ' + srcOf(entity.source).label;
+    if(entity && M.totals.sources > 1) role += ' · ' + srcOf(entity.source).label;
     var r = el('div','cc-role', role);
     r.style.color = k.color;
     card.appendChild(r);
@@ -951,7 +1545,7 @@
 
   // ------------------------------------------------------------- changes ----
   function buildChangesPanel(){
-    var changes = DATA.entities.filter(function(e){ return e.kind==='change'; });
+    var changes = M.entities.filter(function(e){ return e.kind==='change'; });
     if(!changes.length) return null;
     var p = el('div','panel');
     p.appendChild(h2('🔀 Changes ('+changes.length+')'));
@@ -1008,14 +1602,14 @@
     var r1 = el('div','trow');
     r1.appendChild(el('span','tlabel','Type'));
     r1.appendChild(chip('kind','all','Tous', '#6366f1', totalFor('source', state.source)));
-    DATA.kinds.forEach(function(k){
+    M.kinds.forEach(function(k){
       var n = countBy('kind', k.key);
       if(!n && state.kind!==k.key) return;
       r1.appendChild(chip('kind',k.key,k.icon+' '+k.label,k.color,n));
     });
     tb.appendChild(r1);
 
-    var detected = DATA.sources.filter(function(s){ return s.detected; });
+    var detected = M.sources.filter(function(s){ return s.detected; });
     // Un seul écosystème : la ligne de filtre n'offre aucun choix, on la retire.
     if(detected.length > 1){
       var r2 = el('div','trow');
@@ -1042,8 +1636,8 @@
   // Total affiché sur le chip « Tous » d'une dimension, en tenant compte de
   // l'autre dimension déjà filtrée.
   function totalFor(otherDim, otherVal){
-    if(otherVal==='all') return DATA.totals.entities;
-    return DATA.entities.filter(function(e){
+    if(otherVal==='all') return M.totals.entities;
+    return M.entities.filter(function(e){
       return otherDim==='source' ? e.source===otherVal : e.kind===otherVal;
     }).length;
   }
@@ -1051,7 +1645,7 @@
   // Compte en tenant compte de l'AUTRE dimension : les compteurs reflètent ce
   // qu'on obtiendrait vraiment en cliquant, pas un total global trompeur.
   function countBy(dim, val){
-    return DATA.entities.filter(function(e){
+    return M.entities.filter(function(e){
       if(dim==='kind') return e.kind===val && (state.source==='all'||e.source===state.source);
       return e.source===val && (state.kind==='all'||e.kind===state.kind);
     }).length;
@@ -1069,7 +1663,7 @@
 
   // ------------------------------------------------------------------ fiches --
   function visibleEntities(){
-    return DATA.entities.filter(function(e){
+    return M.entities.filter(function(e){
       if(state.kind!=='all' && e.kind!==state.kind) return false;
       if(state.source!=='all' && e.source!==state.source) return false;
       if(!state.q) return true;
@@ -1090,7 +1684,7 @@
     // Regroupement par type, dans l'ordre canonique du modèle universel.
     // Chaque groupe est repliable : sur un projet réel, une seule catégorie peut
     // compter cinquante entités et noyer toutes les autres.
-    DATA.kinds.forEach(function(k){
+    M.kinds.forEach(function(k){
       var group = items.filter(function(e){ return e.kind===k.key; });
       if(!group.length) return;
       var block = el('div','cat-block');
@@ -1120,7 +1714,7 @@
   function renderCard(e,k){
     var card = el('div','card');
     // Barre de gauche : statut si l'entité en a un, sinon urgence, sinon type.
-    var st = (DATA.statuses||[]).filter(function(x){ return x.key===e.status; })[0];
+    var st = (M.statuses||[]).filter(function(x){ return x.key===e.status; })[0];
     card.style.borderLeftColor = st ? st.color
       : (e.tone==='danger' ? '#e11d48' : (e.tone==='warn' ? '#d97706' : k.color));
     if(e.tone==='danger'||e.tone==='warn') card.classList.add('flag');
@@ -1167,20 +1761,20 @@
   // ------------------------------------------------------- modale de détail --
   function relationsOf(id){
     var out = { out:[], in:[] };
-    (DATA.graph.edges||[]).forEach(function(ed){
+    ((M.graph||{}).edges||[]).forEach(function(ed){
       if(ed.s===id) out.out.push({ id:ed.t, type:ed.type, cross:ed.cross });
       else if(ed.t===id) out.in.push({ id:ed.s, type:ed.type, cross:ed.cross });
     });
     return out;
   }
   function edgeMeta(type){
-    var list = DATA.graph.edgeTypes||[];
+    var list = (M.graph||{}).edgeTypes||[];
     for(var i=0;i<list.length;i++){ if(list[i].type===type) return list[i]; }
     return { type:type, label:type, verb:type, color:'#94a3b8' };
   }
   function nodeLabel(id){
     if(byId[id]) return byId[id].name;
-    var g = DATA.graph.nodes||[];
+    var g = (M.graph||{}).nodes||[];
     for(var i=0;i<g.length;i++){ if(g[i].id===id) return g[i].label; }
     return id;
   }
@@ -1286,7 +1880,7 @@
     var byType = {};
     list.forEach(function(r){ (byType[r.type] = byType[r.type] || []).push(r); });
 
-    (DATA.graph.edgeTypes||[]).forEach(function(t){
+    ((M.graph||{}).edgeTypes||[]).forEach(function(t){
       var group = byType[t.type];
       if(!group) return;
       var sec = el('div','rg-sec');
@@ -1324,12 +1918,12 @@
   }
 
   function nodeKind(id){
-    var g = DATA.graph.nodes||[];
+    var g = (M.graph||{}).nodes||[];
     for(var i=0;i<g.length;i++){ if(g[i].id===id) return g[i].kind; }
     return 'document';
   }
   function nodePath(id){
-    var g = DATA.graph.nodes||[];
+    var g = (M.graph||{}).nodes||[];
     for(var i=0;i<g.length;i++){ if(g[i].id===id) return g[i].path||''; }
     return '';
   }
@@ -1345,8 +1939,8 @@
   function buildTreesPanel(){
     var p = el('div','panel');
     p.appendChild(h2('🌳 Arborescence des dossiers IA'));
-    if(!DATA.trees.length){ p.appendChild(el('div','empty','Aucun dossier à afficher.')); return p; }
-    DATA.trees.forEach(function(t){
+    if(!M.trees.length){ p.appendChild(el('div','empty','Aucun dossier à afficher.')); return p; }
+    M.trees.forEach(function(t){
       var s = srcOf(t.source);
       var hd = el('div','treeroot');
       var dot=el('span','dot'); dot.style.background=s.color;
@@ -1511,13 +2105,19 @@
   // relation représentent l'essentiel de l'encombrement du graphe sans rien
   // apprendre. On peut les rétablir d'une case à cocher.
   var gState = { view:'network', colorBy:'kind', show:{}, showGeneric:false, showOrphans:false, kinds:{} };
-  (function(){ (DATA.graph.edgeTypes||[]).forEach(function(t){ gState.show[t.type]=true; }); })();
+  // Les types de relations dépendent du modèle : un modèle workspace n'en a
+  // aucun, et deux projets n'ont pas les mêmes. L'amorçage suit donc setModel()
+  // au lieu de s'exécuter une seule fois au chargement.
+  function seedEdgeTypes(){
+    gState.show = {}; gState.kinds = {};
+    (((M.graph||{}).edgeTypes)||[]).forEach(function(t){ gState.show[t.type]=true; });
+  }
   var graphApi = null;
   var graphExitFs = null;
 
   // Sous-graphe réellement dessiné, après application des filtres.
   function visibleGraph(){
-    var g = DATA.graph || { nodes:[], edges:[] };
+    var g = M.graph || { nodes:[], edges:[] };
     var drop = {};
     if(!gState.showGeneric){
       g.nodes.forEach(function(n){ if(n.kind==='tool') drop[n.id]=1; });
@@ -1544,7 +2144,7 @@
     var panel = el('div','panel graph-panel');
     panel.id='graph-panel';
 
-    var g = DATA.graph || { nodes:[], edges:[] };
+    var g = M.graph || { nodes:[], edges:[] };
     if(!g.nodes.length){
       panel.appendChild(h2('🕸️ Graphe transverse'));
       panel.appendChild(el('div','empty','Aucune entité à relier.'));
@@ -1640,7 +2240,7 @@
 
     // LIENS — même principe : le trait montre le style, la case filtre.
     side.appendChild(el('div','gs-label','Liens'));
-    (DATA.graph.edgeTypes||[]).forEach(function(t){
+    ((M.graph||{}).edgeTypes||[]).forEach(function(t){
       var n = g.edges.filter(function(e){ return e.type===t.type; }).length;
       if(!n) return;
       var lab = el('label','gs-edge');
@@ -2098,5 +2698,7 @@
     };
   }
 
+  setModel(DATA);
+  if(isWorkspace()) state.tab='portfolio';
   render();
 })();

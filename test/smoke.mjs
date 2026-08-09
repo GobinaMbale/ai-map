@@ -18,6 +18,8 @@ import { buildTrees } from '../src/core/explorer.mjs';
 import { buildModel, makeEntity } from '../src/core/model.mjs';
 import { renderHtml } from '../src/core/reporting/render.mjs';
 import { parseYamlLite } from '../src/core/parser.mjs';
+import { buildWorkspace } from '../src/core/workspace.mjs';
+import { runReportInFakeDom, findAll, textOf } from './harness.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -362,162 +364,202 @@ for (const t of run.tabs) {
   }
 }
 
+// ----- 3 ter) Une alerte doit être VRAIE et actionnable ---------------------
+// Un hook n'est jamais « référencé » : Claude Code l'invoque sur un événement.
+// Lui reprocher que rien ne le cite était factuellement faux, et le proposer à
+// la suppression aurait détruit une configuration active.
+{
+  const hookOnly = {
+    ...m,
+    entities: [
+      { id: 'w1', kind: 'workflow', source: 'claude', name: 'Stop',
+        description: 'Hook de fin de session.', path: '.claude/settings.json',
+        meta: [], badges: [], mtime: new Date().toISOString() },
+      { id: 's1', kind: 'skill', source: 'claude', name: 'sans-description',
+        description: '', path: '.claude/skills/x/SKILL.md',
+        meta: [], badges: [], mtime: new Date().toISOString() },
+      { id: 'r1', kind: 'spec', source: 'openspec', name: 'jamais-citee',
+        description: 'Une spec.', path: 'openspec/specs/x/spec.md',
+        meta: [], badges: [], mtime: new Date().toISOString() },
+    ],
+    graph: { nodes: [], edges: [], edgeTypes: [] },
+    totals: { ...m.totals, entities: 3 },
+  };
+
+  const r = runReportInFakeDom(hookOnly);
+  const gov = findAll(r.root, (n) => /^tab( on)?$/.test(String(n.className)))
+    .find((n) => /Gouvernance/.test(textOf(n)));
+  if (gov) gov.onclick();
+  const reasons = findAll(r.root, (n) => n.className === 'ac-reason').map(textOf);
+
+  check('un hook n\'est jamais accusé de n\'être pas référencé',
+    !reasons.some((t) => /référence/i.test(t) && /Stop/.test(t)) &&
+    !findAll(r.root, (n) => n.className === 'acard info')
+      .some((c) => /Stop/.test(textOf(c)) && /référence/i.test(textOf(c))),
+    reasons.join(' | '));
+
+  check('une skill sans description est signalée',
+    reasons.some((t) => /description/i.test(t)), reasons.join(' | '));
+
+  check('une spec que rien ne cite est signalée',
+    reasons.some((t) => /référence/i.test(t)), reasons.join(' | '));
+
+  // Le reproche doit être vérifiable et suivi d'une action.
+  check('chaque alerte expose ses constats',
+    findAll(r.root, (n) => n.className === 'ac-fact').length > 0);
+  check('chaque alerte dit quoi faire',
+    findAll(r.root, (n) => n.className === 'ac-todo').length > 0);
+
+  // Aucune recommandation ne doit proposer de supprimer un objet auto-activé.
+  const recos = findAll(r.root, (n) => n.className === 'reco').map(textOf);
+  check('aucune recommandation ne propose de supprimer un hook',
+    !recos.some((t) => /supprimer/i.test(t)), recos.join(' | '));
+
+  // Un change CONTIENT ses tâches : il a des arêtes sortantes et personne ne le
+  // cite, par construction. Exiger une arête entrante le signalait à tort.
+  const withTree = {
+    ...m,
+    entities: [
+      { id: 'c1', kind: 'change', source: 'openspec', name: 'add-truc',
+        description: 'Un change.', path: 'openspec/changes/add-truc/proposal.md',
+        meta: [], badges: [], mtime: new Date().toISOString() },
+      { id: 't1', kind: 'task', source: 'openspec', name: '1. Faire',
+        description: '', path: 'openspec/changes/add-truc/tasks.md',
+        meta: [], badges: [], mtime: new Date().toISOString() },
+    ],
+    graph: { nodes: [], edges: [{ s: 'c1', t: 't1', type: 'contains' }], edgeTypes: [] },
+    totals: { ...m.totals, entities: 2 },
+  };
+  const r2 = runReportInFakeDom(withTree);
+  const gov2 = findAll(r2.root, (n) => /^tab( on)?$/.test(String(n.className)))
+    .find((n) => /Gouvernance/.test(textOf(n)));
+  if (gov2) gov2.onclick();
+  const reasons2 = findAll(r2.root, (n) => n.className === 'ac-reason').map(textOf);
+  check('un change qui contient ses tâches n\'est pas dit orphelin',
+    !reasons2.some((t) => /référence/i.test(t)), reasons2.join(' | '));
+}
+
+// ----- 3 quater) La traçabilité ne punit pas les usages légitimes -----------
+// Toutes les skills ne touchent pas du code, et ce n'est pas un défaut :
+//   · une skill qui pilote Jira via MCP a une cible distante VÉRIFIABLE ;
+//   · une skill de procédure (traiter des images, relire une PR) n'annonce
+//     aucune cible — lui reprocher un lien absent serait un reproche inventé ;
+//   · seule une cible ANNONCÉE mais invérifiable est un vrai défaut.
+{
+  const ent = (o) => ({ source: 'claude', meta: [], badges: [], mtime: new Date().toISOString(),
+    description: 'x', links: { code: [], files: [], tools: [], wiki: [], targets: [] }, ...o });
+
+  const mixed = {
+    ...m,
+    entities: [
+      ent({ id: 'mcp1', kind: 'mcp', name: 'jira', path: '.mcp.json' }),
+      // Pilote un service distant déclaré → traçable.
+      ent({ id: 'sk1', kind: 'skill', name: 'jira-ticket', path: '.claude/skills/a/SKILL.md',
+        links: { code: [], files: [], tools: ['jira'], wiki: [], targets: [] } }),
+      // Procédure pure : n'annonce rien → hors périmètre.
+      ent({ id: 'sk2', kind: 'skill', name: 'traiter-images', path: '.claude/skills/b/SKILL.md' }),
+      // Annonce un chemin qui n'existe pas → défaut réel.
+      ent({ id: 'sk3', kind: 'skill', name: 'casse', path: '.claude/skills/c/SKILL.md',
+        links: { code: ['src/nexistepas.ts'], files: [], tools: [], wiki: [], targets: [] } }),
+    ],
+    graph: { nodes: [], edges: [{ s: 'sk1', t: 'mcp1', type: 'tool' }], edgeTypes: [] },
+    totals: { ...m.totals, entities: 4 },
+  };
+
+  const r3 = runReportInFakeDom(mixed);
+  const gov3 = findAll(r3.root, (n) => /^tab( on)?$/.test(String(n.className)))
+    .find((n) => /Gouvernance/.test(textOf(n)));
+  if (gov3) gov3.onclick();
+  const recos3 = findAll(r3.root, (n) => n.className === 'reco').map(textOf);
+
+  // 2 acteurs annoncent une cible (sk1, sk3) ; 1 seule se vérifie → 50 %.
+  const pct = findAll(r3.root, (n) => n.className === 'sp-pct').map(textOf);
+  check('une skill pilotant un MCP déclaré compte comme traçable',
+    pct.includes('50%'), pct.join(' | '));
+
+  check('une skill de procédure n\'apparaît dans aucune recommandation',
+    !recos3.some((t) => /traiter-images/.test(t)), recos3.join(' | '));
+
+  check('un chemin cité introuvable est signalé comme tel',
+    recos3.some((t) => /chemins? cités?/i.test(t)), recos3.join(' | '));
+}
+
+// ----- 3 bis) Le rapport signale les projets voisins ------------------------
+// Le rapport HTML se lit hors de VS Code : sans cette note, son score se lit
+// comme celui de tout le dossier alors qu'il ne couvre qu'un projet.
+{
+  // Le harnais clique TOUS les onglets et s'arrête sur le dernier : il faut
+  // revenir sur la vue d'ensemble, sinon l'assertion — et sa négation —
+  // portent sur un onglet où la note n'a jamais eu à apparaître.
+  const overview = (r) => {
+    const t = findAll(r.root, (n) => /^tab( on)?$/.test(String(n.className)))
+      .find((n) => /Vue d'ensemble/.test(textOf(n)));
+    if (t) t.onclick();
+    return r;
+  };
+
+  const near = overview(runReportInFakeDom({ ...m, nearby: { count: 5, others: ['x', 'y'] } }));
+  check('le rapport signale les projets voisins',
+    !near.error && findAll(near.root, (n) => n.className === 'near-note').length === 1,
+    near.error ? near.error.stack : 'aucune note');
+  check('la note donne la commande exacte',
+    findAll(near.root, (n) => n.className === 'near-cmd')
+      .some((n) => /--workspace/.test(textOf(n))));
+  check('sans voisin, aucune note',
+    findAll(overview(run).root, (n) => n.className === 'near-note').length === 0);
+}
+
+// ----- 4) Vue portefeuille (workspace) -------------------------------------
+// Le rapport workspace est un AUTRE produit : d'autres onglets, d'autres chiffres.
+// Rendu par le même app.js, il doit donc être exercé séparément.
+runWorkspaceChecks();
+
 console.log('');
 if (failures) { console.error(failures + ' test(s) en échec.'); process.exit(1); }
 console.log('Tous les tests passent.');
 
-// ---------------------------------------------------------------------------
-// DOM minimal : juste assez pour exécuter le premier rendu complet du rapport,
-// y compris la mise en page du graphe (canvas 2D bouchonné).
-function runReportInFakeDom(model) {
-  const noop = () => {};
-  const ctx2d = new Proxy({
-    measureText: (t) => ({ width: String(t).length * 6 }),
-    canvas: { width: 900, height: 500 },
-  }, {
-    get: (t, k) => (k in t ? t[k] : noop),
-    set: () => true,
-  });
+function runWorkspaceChecks() {
+  const ws = buildWorkspace({ root: path.join(ROOT, 'examples') });
+  if (!ws) { check('un workspace est constructible depuis examples/', false); return; }
+  console.log('\nrapport workspace (examples/)');
+  check('le modèle est marqué workspace', ws.workspace === true);
 
-  const byId = {};
+  const w = runReportInFakeDom(ws);
+  check('le rapport workspace s\'exécute', !w.error, w.error && w.error.stack);
+  if (w.error) return;
 
-  function makeEl(tag) {
-    const el = {
-      tagName: String(tag).toUpperCase(),
-      children: [], dataset: {},
-      // Les variables CSS passent par setProperty : un objet nu ne suffit pas.
-      style: {
-        setProperty(k, v) { this[k] = v; },
-        getPropertyValue(k) { return this[k] || ''; },
-        removeProperty(k) { delete this[k]; },
-      },
-      className: '', textContent: '', title: '', type: '', value: '',
-      // `innerHTML = ''` est la façon dont le rapport vide un conteneur : sans
-      // ce setter, les enfants s'accumuleraient et le parcours de test
-      // retrouverait des nœuds périmés.
-      set innerHTML(v) { if (v === '') this.children = []; this._html = v; },
-      get innerHTML() { return this._html || ''; },
-      clientWidth: 900, clientHeight: 500, width: 900, height: 500,
-      offsetWidth: 120, offsetHeight: 40,
-      // classList RÉEL, adossé à className : bouchonné, il rendait
-      // intestable tout code qui lit l'état d'une classe — comme le bouton
-      // plein écran, qui décide en fonction de `contains('fullscreen')`.
-      appendChild(c) { this.children.push(c); return c; },
-      removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; },
-      remove() {}, insertBefore(c) { this.children.push(c); return c; },
-      setAttribute: noop, getAttribute: () => null, removeAttribute: noop,
-      addEventListener: noop, removeEventListener: noop,
-      getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 500 }),
-      scrollIntoView: noop, focus: noop, click: noop,
-      getContext: () => ctx2d,
-      querySelector: () => null, querySelectorAll: () => [],
-      get parentNode() { return null; },
-      // Condition exacte d'une webview VS Code : la méthode EXISTE mais son
-      // appel est refusé (iframe sans autorisation). Ne pas la définir du tout
-      // testerait un cas qui n'arrive dans aucun navigateur moderne.
-      requestFullscreen: () => Promise.reject(new Error('fullscreen refusé')),
-    };
-    el.classList = {
-      _list() { return String(el.className || '').split(/\s+/).filter(Boolean); },
-      contains(c) { return this._list().includes(c); },
-      add(c) {
-        const l = this._list();
-        if (!l.includes(c)) { l.push(c); el.className = l.join(' '); }
-      },
-      remove(c) { el.className = this._list().filter((x) => x !== c).join(' '); },
-      toggle(c, force) {
-        const want = force === undefined ? !this.contains(c) : !!force;
-        if (want) this.add(c); else this.remove(c);
-        return want;
-      },
-    };
-
-    // `id` doit être un accesseur pour alimenter getElementById : sans ça,
-    // document.getElementById renvoyait null et le rapport sortait de son rendu
-    // sans rien construire — les tests passaient à vide.
-    let idVal = '';
-    Object.defineProperty(el, 'id', {
-      get: () => idVal,
-      set: (v) => { idVal = v; if (v) byId[v] = el; },
-      enumerable: true,
-    });
-    return el;
+  const labels = w.tabs.map((t) => t.label);
+  check('les onglets sont ceux du portefeuille, pas ceux d\'un projet',
+    labels.some((l) => /Portefeuille/.test(l)) && !labels.some((l) => /Timeline/.test(l)),
+    labels.join(' | '));
+  for (const t of w.tabs) {
+    check('onglet « ' + t.label + ' » se construit', !t.error && t.nodes > 5,
+      t.error ? t.error.stack : t.nodes + ' nœuds');
   }
 
-  const appEl = makeEl('div');
-  appEl.id = 'app';
+  // Une fiche projet doit MENER quelque part : sans navigation, le rapport
+  // workspace ne serait qu'un tableau de bord en cul-de-sac.
+  const port = findAll(w.root, (n) => n.tagName === 'BUTTON' && /Portefeuille/.test(textOf(n)))[0];
+  if (port) port.onclick();
+  const cards = findAll(w.root, (n) => n.className === 'proj-card');
+  check('une fiche par projet', cards.length === ws.totals.projects,
+    cards.length + ' fiche(s) pour ' + ws.totals.projects + ' projet(s)');
 
-  const document = {
-    getElementById: (id) => byId[id] || null,
-    createElement: (t) => makeEl(t),
-    createTextNode: (t) => ({ nodeType: 3, textContent: String(t) }),
-    addEventListener: noop, removeEventListener: noop,
-    body: makeEl('body'),
-    documentElement: Object.assign(makeEl('html'), {
-      getAttribute: () => null, setAttribute: noop,
-    }),
-    querySelector: () => null,
-  };
+  if (cards.length) {
+    cards[0].onclick();
+    // On regarde les ONGLETS, pas tous les boutons : le retour du fil d'Ariane
+    // s'appelle lui aussi « ← Portefeuille » et fausserait le test.
+    const inside = findAll(w.root, (n) => /^tab( on)?$/.test(String(n.className))).map(textOf);
+    check('ouvrir un projet donne les onglets du projet',
+      inside.some((l) => /Timeline/.test(l)) && !inside.some((l) => /Portefeuille/.test(l)),
+      inside.join(' | '));
 
-  const sandbox = {
-    document,
-    DATA: JSON.parse(JSON.stringify(model)),
-    window: {
-      devicePixelRatio: 1, innerWidth: 1400, innerHeight: 900,
-      addEventListener: noop, removeEventListener: noop,
-      matchMedia: () => ({ matches: false }),
-      scrollTo: noop,
-    },
-    requestAnimationFrame: noop,
-    localStorage: { getItem: () => null, setItem: noop },
-    matchMedia: () => ({ matches: false }),
-    getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    setTimeout: noop, clearTimeout: noop,
-    console,
-  };
-  sandbox.globalThis = sandbox;
-
-  const js = fs.readFileSync(
-    path.join(ROOT, 'src', 'core', 'reporting', 'assets', 'app.js'), 'utf8');
-  try {
-    vm.runInNewContext(js, sandbox, { timeout: 20000 });
-  } catch (e) {
-    return { error: e, tabs: [] };
-  }
-
-  // Le rendu initial ne construit QUE l'onglet par défaut. On clique donc
-  // chaque onglet : un panneau cassé passerait sinon totalement inaperçu.
-  const tabs = [];
-  for (const btn of findAll(appEl, (n) => n.className === 'tab' || n.className === 'tab on')) {
-    const label = textOf(btn);
-    try {
-      btn.onclick();
-      tabs.push({ label, error: null, nodes: countNodes(appEl) });
-    } catch (e) {
-      tabs.push({ label, error: e, nodes: 0 });
+    const back = findAll(w.root, (n) => n.className === 'crumb-back')[0];
+    check('un fil d\'Ariane ramène au portefeuille', !!back);
+    if (back) {
+      back.onclick();
+      check('le retour restaure la vue portefeuille',
+        findAll(w.root, (n) => n.className === 'proj-card').length === cards.length);
     }
   }
-  return { error: null, tabs, root: appEl };
-}
-
-function findAll(node, pred, acc = []) {
-  for (const child of node.children || []) {
-    if (child && typeof child === 'object') {
-      if (pred(child)) acc.push(child);
-      findAll(child, pred, acc);
-    }
-  }
-  return acc;
-}
-
-function textOf(node) {
-  let out = node.textContent || '';
-  for (const c of node.children || []) out += textOf(c) || c.textContent || '';
-  return out.trim();
-}
-
-function countNodes(node) {
-  let n = 0;
-  for (const c of node.children || []) { n += 1 + countNodes(c); }
-  return n;
 }

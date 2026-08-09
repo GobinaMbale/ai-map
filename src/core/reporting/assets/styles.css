@@ -469,3 +469,117 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:26px 0 8px}.gh
   border-radius:7px;padding:3px 10px;font-size:11.5px;font-family:inherit;cursor:pointer;
   font-weight:600;white-space:nowrap}
 .gtip-act:hover{background:rgba(99,102,241,.12)}
+
+/* ===================================================== vue portefeuille ===
+   Un niveau au-dessus du projet : des fiches de projet, pas des entités. */
+.crumb{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:12px}
+.crumb-back{background:transparent;border:0;padding:0;font-family:inherit;font-size:12px;
+  color:var(--accent);cursor:pointer;font-weight:600}
+.crumb-back:hover{text-decoration:underline}
+.crumb-sep{color:var(--muted)}
+.crumb-here{color:var(--muted);font-weight:600}
+
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:14px;margin:0 0 26px}
+.proj-card{display:flex;flex-direction:column;gap:11px;text-align:left;font-family:inherit;
+  color:var(--fg);
+  background:var(--panel);border:1px solid var(--border);border-radius:13px;
+  padding:16px 17px;cursor:pointer;transition:border-color .12s,transform .12s}
+.proj-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.pc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pc-names{min-width:0}
+.pc-name{font-size:15px;font-weight:700;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-path{font-size:11.5px;color:var(--muted);font-family:var(--mono);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Le score est le seul chiffre qu'on doit pouvoir comparer d'une fiche à
+   l'autre sans lire : anneau teinté, taille fixe, toujours au même endroit. */
+.pc-score{flex:0 0 auto;width:46px;height:46px;border-radius:50%;
+  display:grid;place-items:center;border:2.5px solid var(--tone,#94a3b8)}
+.pc-num{font-size:16px;font-weight:800;color:var(--tone,#94a3b8);letter-spacing:-.02em}
+.pc-chips{display:flex;flex-wrap:wrap;gap:5px}
+.pc-chip{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chip);
+  border:1px solid var(--border);color:var(--muted);white-space:nowrap}
+.pc-stats{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+.pc-stat b{font-weight:800;font-size:13.5px;color:var(--fg)}
+.pc-foot{font-size:11.5px;color:var(--muted);border-top:1px solid var(--border);
+  padding-top:9px;margin-top:auto}
+.pc-foot.warn{color:#f59e0b;font-weight:600}
+
+/* ------------------------------------------------------- divergences --- */
+.dv-filters{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.dv-pill{display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:12.5px;
+  padding:6px 13px;border-radius:999px;cursor:pointer;font-weight:600;
+  background:var(--chip);border:1px solid var(--border);color:var(--muted)}
+.dv-pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.dv-n{font-size:11px;font-weight:800;opacity:.75}
+
+.dv-list{display:flex;flex-direction:column;gap:10px}
+.dv-row{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;border-left:3px solid var(--border)}
+.dv-row.bad{border-left-color:#f59e0b}
+.dv-head{display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+.dv-icon{font-size:14px}
+.dv-name{font-weight:700;font-size:14px;font-family:var(--mono)}
+.dv-kind{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
+.dv-spread{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap}
+
+.dv-variants{display:flex;flex-direction:column;gap:7px;margin-top:11px}
+.dv-variant{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+/* La variante la plus répandue sert de référence implicite : c'est elle que
+   les autres devraient rejoindre, pas l'inverse. */
+.dv-vtag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted);min-width:78px}
+.dv-vtag.ref{color:var(--accent)}
+.dv-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dv-chip{font-family:var(--mono);font-size:11.5px;padding:3px 10px;border-radius:7px;
+  background:var(--chip);border:1px solid var(--border);color:var(--fg);cursor:pointer}
+.dv-chip:hover{border-color:var(--accent);color:var(--accent)}
+.dv-chip.miss{cursor:default;color:#ef4444;border-style:dashed;background:transparent}
+.dv-missing{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:11px}
+.dv-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted)}
+
+.ws-empty{text-align:center;padding:48px 20px;background:var(--panel);
+  border:1px solid var(--border);border-radius:13px}
+.wse-icon{font-size:30px;color:#22c55e;margin-bottom:10px}
+.wse-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.wse-note{font-size:12.5px;color:var(--muted);max-width:460px;margin:0 auto;line-height:1.6}
+
+/* Bandeau de réassurance : un portefeuille aligné doit se voir en une ligne,
+   pas se déduire d'une liste de copies conformes. */
+.dv-ok{display:flex;align-items:center;gap:10px;font-size:13px;padding:12px 15px;
+  border-radius:11px;margin:0 0 18px;line-height:1.5;
+  background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.3)}
+.dv-ok-icon{font-size:16px;color:#22c55e;font-weight:800}
+/* Artefacts d'un même groupe de projets : des étiquettes, pas une liste — on
+   compte du regard au lieu de lire vingt-trois lignes. */
+.dv-shared{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.dv-art{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;
+  padding:3px 9px;border-radius:7px;background:var(--chip);
+  border:1px solid var(--border);color:var(--fg)}
+.dv-art-ic{font-size:11px}
+
+/* « Ce dossier contient d'autres projets » — le rapport est hors ligne et ne
+   peut pas relancer l'analyse : il donne la commande, pas un bouton mort. */
+.near-note{display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+  font-size:12.5px;line-height:1.5;padding:11px 15px;border-radius:11px;margin:0 0 18px;
+  background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.28)}
+.near-list{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.near-cmd{margin-left:auto;font-family:var(--mono);font-size:11.5px;
+  padding:4px 10px;border-radius:7px;background:var(--chip);border:1px solid var(--border)}
+
+/* Sur quoi l'alerte se fonde, et quoi faire. Sans ces deux lignes on doit
+   croire l'outil sur parole — et on ne sait pas par où commencer. */
+.ac-facts,.ac-todo{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;
+  margin-top:7px;font-size:12px;line-height:1.5}
+.ac-flabel{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);flex:0 0 auto}
+.ac-fact{font-size:11.5px;padding:1px 8px;border-radius:999px;
+  background:var(--chip);border:1px solid var(--border);color:var(--muted)}
+.ac-todo{color:var(--ink)}
+
+/* Le périmètre d'une composante : ce qu'elle mesure ET ce qu'elle écarte.
+   Un pourcentage sans dénominateur ne se conteste pas. */
+.sp-scope{font-size:11px;color:var(--muted);margin-top:5px;
+  padding-top:5px;border-top:1px dashed var(--border);line-height:1.5}
