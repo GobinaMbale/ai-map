@@ -3,6 +3,10 @@
 **Visualiser, comprendre, gouverner et piloter l'écosystème IA d'un projet** —
 en une page HTML autoportante.
 
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/gobinadaniel.ai-map-vscode?label=VS%20Code%20Marketplace&color=6366f1)](https://marketplace.visualstudio.com/items?itemName=gobinadaniel.ai-map-vscode)
+[![Release](https://img.shields.io/github/v/release/GobinaMbale/ai-map?label=release&color=14b8a6)](https://github.com/GobinaMbale/ai-map/releases)
+[![Licence](https://img.shields.io/github/license/GobinaMbale/ai-map?color=64748b)](LICENSE)
+
 > Mono-fichier · **zéro dépendance** · **zéro appel réseau** · **zéro télémétrie** ·
 > **ordre de sortie stable** · fonctionne hors ligne.
 
@@ -126,17 +130,52 @@ les systèmes, pas l'édition à l'intérieur de l'un d'eux.
 
 ---
 
-## Installation et usage
+## Installation
 
-**Prérequis : Node.js ≥ 16**, rien d'autre.
+Deux façons d'utiliser AI-MAP, indépendantes l'une de l'autre.
+
+### Extension VS Code — la plus simple
+
+[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/gobinadaniel.ai-map-vscode?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=gobinadaniel.ai-map-vscode)
 
 ```bash
-# Depuis la source
-node src/ai-map.mjs .            # carte du projet courant
-node src/ai-map.mjs . --open     # + ouverture navigateur
+code --install-extension gobinadaniel.ai-map-vscode
+```
 
-# Fichier autonome (après npm run build)
-node bin/ai-map.mjs /chemin/projet --open
+Ou depuis VS Code : `Ctrl/Cmd+Shift+X`, chercher **AI-MAP**.
+
+**Aucun prérequis** — pas même Node.js. Le moteur est embarqué dans l'extension
+et exécuté par VS Code lui-même. Fonctionne aussi dans les éditeurs qui
+embarquent l'API VS Code (Cursor, Windsurf, Trae, Kiro, Qoder).
+
+### Ligne de commande
+
+**Prérequis : Node.js ≥ 16.**
+
+```bash
+npx github:GobinaMbale/ai-map . --open      # essai immédiat, sans installer
+npm i -g github:GobinaMbale/ai-map          # commande `ai-map` disponible partout
+```
+
+Ou en récupérant le fichier autonome depuis une
+[release](https://github.com/GobinaMbale/ai-map/releases) : `bin/ai-map.mjs`
+est un **unique fichier sans dépendance**, à déposer où l'on veut.
+
+```bash
+node ai-map.mjs /chemin/projet --open
+```
+
+> Le paquet n'est pas encore sur le registre npm public : le nom `ai-map` y est
+> déjà pris par un projet sans rapport. D'ici là, l'installation passe par
+> GitHub — la commande reste `ai-map`.
+
+## Usage
+
+```bash
+ai-map .                    # carte du projet courant
+ai-map . --open             # + ouverture dans le navigateur
+ai-map ../autre-projet      # n'importe quel projet
+ai-map . -o docs/carte.html # sortie choisie
 ```
 
 | Argument | Effet |
@@ -145,6 +184,17 @@ node bin/ai-map.mjs /chemin/projet --open
 | `-o fichier.html` | fichier de sortie (défaut `<projet>/ai-map.report.html`) |
 | `--open` | ouvrir le rapport dans le navigateur |
 | `--json` | écrire aussi le modèle brut en JSON (CI, outils tiers) |
+
+Le rapport est un **fichier HTML autoportant** : il s'ouvre hors ligne, se
+partage par mail ou se publie sur un intranet sans rien d'autre.
+
+### Depuis les sources
+
+```bash
+git clone https://github.com/GobinaMbale/ai-map
+cd ai-map && npm install     # playwright-core, pour la vérification visuelle
+node src/ai-map.mjs . --open
+```
 
 ---
 
@@ -228,6 +278,24 @@ ai-map/
 ```
 
 ## Extension VS Code
+
+Publiée sur le
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=gobinadaniel.ai-map-vscode) :
+`code --install-extension gobinadaniel.ai-map-vscode`.
+
+Ce qu'elle apporte :
+
+| Commande | Effet |
+|---|---|
+| **AI-MAP : Générer la carte** | rapport complet dans un onglet de l'éditeur |
+| **AI-MAP : Ouvrir dans le navigateur** | plein écran, impression, partage du fichier |
+| **AI-MAP : Enregistrer le rapport HTML…** | choix de l'emplacement, pour diffusion |
+| **AI-MAP : Rafraîchir** | ré-analyse le workspace |
+
+Elle se réveille toute seule sur un dossier contenant `.claude/`, `CLAUDE.md`
+ou `openspec/`, et se ré-analyse quand une configuration IA change.
+
+### Compiler soi-même
 
 ```bash
 node build.mjs                      # embarque le moteur dans l'extension
@@ -350,6 +418,24 @@ npm run build    # régénérer bin/ai-map.mjs depuis src/
 
 ---
 
+## Distribution
+
+| Canal | État |
+|---|---|
+| [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gobinadaniel.ai-map-vscode) | ✅ publié — `gobinadaniel.ai-map-vscode` |
+| [GitHub Releases](https://github.com/GobinaMbale/ai-map/releases) | ✅ publié — `.vsix` joint à chaque release |
+| Installation via `npx github:…` | ✅ disponible |
+| Registre npm public | ⏳ le nom `ai-map` y est pris par un projet tiers |
+| Open VSX (VSCodium, Gitpod, Theia) | ⏳ prévu |
+| Plugin Claude Code | ⏳ prévu |
+
+Les versions suivent [SemVer](https://semver.org/lang/fr/) et sont décrites dans
+[CHANGELOG.md](CHANGELOG.md). Le processus de release est en deux phases, la
+publication n'ayant lieu qu'après validation humaine — voir
+`.claude/skills/release/`.
+
+---
+
 ## Feuille de route
 
 | Version | Contenu |
@@ -357,8 +443,9 @@ npm run build    # régénérer bin/ai-map.mjs depuis src/
 | **V1** | ✅ socle plug-in · adaptateur Claude · adaptateur OpenSpec · dashboard · graphe transverse · lien vers le code source · rapport HTML |
 | **V1.1** | ✅ Timeline · extension VS Code (vue latérale + icône + métadonnées marketplace) |
 | **V2** | ✅ Cursor · Copilot · Roo · Windsurf · MCP universel · parseur YAML minimal |
+| **v1.0.0** | ✅ gouvernance actionnable · sélecteur d'impact · graphe en barre latérale · **publication Marketplace** |
 | V3 | Actions OpenSpec · analyse d'impact · comparaison de changes |
-| V4 | Gouvernance · AI Maturity Score · audit IA |
+| V4 | Audit IA · historique du score (nécessite de persister un état) |
 
 Quelques signaux de gouvernance sont déjà produits par les adaptateurs, sans
 attendre la V4 : change OpenSpec terminé mais non archivé, fichier de règles au
