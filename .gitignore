@@ -7,5 +7,4 @@ ai-map.report.json
 docs/design-reference/
 
 # Captures de vérification visuelle : artefacts, pas documentation.
-.shots/
-.shots-dark/
+.shots*/

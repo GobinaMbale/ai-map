@@ -32,6 +32,10 @@ const ROOT = path.join(HERE, '..');
 // Onglets du rapport, dans l'ordre d'affichage.
 const TABS = ['Vue d\'ensemble', 'Impact', 'Gouvernance', 'Graphe', 'Timeline', 'Entités', 'Fichiers'];
 
+// La vue portefeuille a ses propres onglets : capturer la liste ci-dessus sur
+// un rapport workspace ne trouverait rien et sortirait sans rien signaler.
+const WS_TABS = ['Portefeuille', 'Divergences'];
+
 // Navigateurs cherchés, dans l'ordre de préférence.
 const BROWSERS = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -45,11 +49,13 @@ const BROWSERS = [
 ];
 
 function parseArgs(argv) {
-  const o = { project: 'examples/demo-project', out: '.shots', dark: false, width: 1600 };
+  const o = { project: 'examples/demo-project', out: '.shots', dark: false, width: 1600,
+              workspace: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-o' || a === '--out') o.out = argv[++i];
     else if (a === '--dark') o.dark = true;
+    else if (a === '--workspace' || a === '-w') o.workspace = true;
     else if (a === '--width') o.width = Number(argv[++i]) || o.width;
     else if (a === '-h' || a === '--help') { help(); process.exit(0); }
     else if (!a.startsWith('-')) o.project = a;
@@ -91,7 +97,8 @@ const projectDir = path.resolve(ROOT, opts.project);
 const report = path.join(os.tmpdir(), 'ai-map.shot.' + process.pid + '.html');
 console.log('→ génération du rapport pour ' + path.relative(ROOT, projectDir));
 execFileSync(process.execPath,
-  [path.join(ROOT, 'src', 'ai-map.mjs'), projectDir, '-o', report],
+  [path.join(ROOT, 'src', 'ai-map.mjs'), projectDir, '-o', report]
+    .concat(opts.workspace ? ['--workspace'] : []),
   { stdio: 'inherit' });
 
 const outDir = path.resolve(ROOT, opts.out);
@@ -112,7 +119,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + 
 await page.goto('file:///' + report.replace(/\\/g, '/'), { waitUntil: 'load' });
 await page.waitForTimeout(1000);
 
-for (const [i, name] of TABS.entries()) {
+for (const [i, name] of (opts.workspace ? WS_TABS : TABS).entries()) {
   const btn = page.locator('.tab', { hasText: name }).first();
   if (!(await btn.count())) { console.log('✖ onglet introuvable : ' + name); continue; }
   await btn.click();
@@ -122,6 +129,45 @@ for (const [i, name] of TABS.entries()) {
   const file = path.join(outDir, `${String(i + 1).padStart(2, '0')}-${slug}.png`);
   await page.screenshot({ path: file, fullPage: true });
   console.log('✔ ' + name.padEnd(15) + ' → ' + path.relative(ROOT, file));
+}
+
+// En portefeuille, la capture qui compte ensuite est la DESCENTE dans un
+// projet : c'est la seule façon de voir que le fil d'Ariane et les onglets du
+// projet reviennent correctement.
+if (opts.workspace) {
+  // Chaque famille de divergence a son propre rendu ; capturer la seule
+  // famille par défaut laisserait les deux autres jamais regardées.
+  await page.locator('.tab', { hasText: 'Divergences' }).first().click();
+  await page.waitForTimeout(400);
+  const pills = await page.locator('.dv-pill').count();
+  for (let i = 0; i < pills; i++) {
+    const pill = page.locator('.dv-pill').nth(i);
+    const name = (await pill.textContent()).replace(/\d+$/, '').trim();
+    await pill.click();
+    await page.waitForTimeout(400);
+    const slug = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+    const file = path.join(outDir, `02-${slug}.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    console.log('✔ ' + name.padEnd(15) + ' → ' + path.relative(ROOT, file));
+  }
+
+  await page.locator('.tab', { hasText: 'Portefeuille' }).first().click();
+  await page.waitForTimeout(500);
+  const card = page.locator('.proj-card').first();
+  if (await card.count()) {
+    await card.click();
+    await page.waitForTimeout(1200);
+    const file = path.join(outDir, '03-projet-ouvert.png');
+    await page.screenshot({ path: file, fullPage: true });
+    console.log('✔ ' + 'projet ouvert'.padEnd(15) + ' → ' + path.relative(ROOT, file));
+  }
+  if (errors.length) {
+    console.log('\n✖ Erreurs JavaScript dans la page :');
+    for (const e of errors) console.log('  ' + e);
+  }
+  await browser.close();
+  process.exit(errors.length ? 1 : 0);
 }
 
 // La fiche détaillée : c'est là que se voient le rendu Markdown et les blocs

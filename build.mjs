@@ -37,6 +37,7 @@ const MODULES = [
   'core/registry.mjs',
   'core/graph.mjs',
   'core/explorer.mjs',
+  'core/workspace.mjs',
   'core/reporting/render.mjs',
   'ai-map.mjs',
 ];
