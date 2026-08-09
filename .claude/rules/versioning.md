@@ -46,8 +46,10 @@ Terminer par `Co-Authored-By: Claude ...`.
 Elle doit être relue dès qu'un fichier change **ce que l'utilisateur voit** :
 
 - `vscode-extension/package.json` (commandes, vues) ou son `README.md`
-- `src/core/reporting/assets/app.js` (les onglets du rapport)
+- `src/core/reporting/assets/app.js` (les onglets du rapport — mono-projet
+  **et** portefeuille)
 - `src/core/model.mjs` (les écosystèmes supportés)
+- `src/core/workspace.mjs` (la vue portefeuille, et ce qu'elle compare)
 - `src/plugins/` (un adaptateur ajouté ou retiré)
 
 Le script signale ces fichiers et affiche la description actuelle. Vérifier

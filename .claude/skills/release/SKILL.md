@@ -124,7 +124,20 @@ Puis `Developer: Reload Window`. La vue latérale doit commencer par
 `N entités · M relations` — sinon c'est encore l'ancienne.
 
 **`git add -A` ratisse large.** Vérifier `git status --short` avant : ni
-`.shots/`, ni `*.vsix`, ni rapport HTML, ni `node_modules/`.
+`.shots*/`, ni `*.vsix`, ni rapport HTML, ni `node_modules/`.
+
+**Le `.vsix` embarque tout ce qui traîne dans le dossier.** `.vscodeignore` est
+la seule barrière : un manifeste de sauvegarde y a déjà atterri, mettant une
+seconde version de `package.json` dans le paquet distribué. Toujours lire la
+liste « Files included in the VSIX » que `vsce` affiche — elle doit se réduire
+à `extension.js`, `sidebar.js`, `detail.js`, `media/`, `package.json`,
+`readme.md`, `LICENSE.txt`.
+
+**Une build d'essai ne porte jamais un numéro publié.** Repackager sous
+`1.0.1` alors que `1.0.1` est en ligne crée deux contenus différents sous un
+même nom. Utiliser un suffixe (`1.1.0-dev`), et **restaurer** la version du
+manifeste après coup : `release-prepare.mjs` calcule la version suivante à
+partir de celle qui s'y trouve.
 
 **Les tests passent sur `src/`, pas sur le bundle.** Ils réussissent même si
 `bin/ai-map.mjs` est périmé — et c'est le bundle qui est publié. D'où

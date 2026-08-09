@@ -27,9 +27,16 @@ préfixe court et unique :
 Ne **jamais** écrire `const SOURCE = '...'` dans un plugin : c'est exactement
 la collision qui s'est produite entre `claude` et `openspec`.
 
+`core/workspace.mjs` applique la même règle avec le préfixe `ws*` (`wsTrim`,
+`wsFingerprint`, `wsKey`, `WS_COMPARABLE`…). Ce n'est pas un adaptateur, mais il
+partage la portée plate et manipule les mêmes notions que `model.mjs` — sans
+préfixe, `fingerprint` ou `trim` seraient des collisions en puissance.
+
 **Respecter l'ordre de `MODULES` dans `build.mjs`.** `registry.mjs` référence
 les plugins dès l'évaluation de sa constante `PLUGINS` : les plugins doivent
-donc être concaténés AVANT lui. De même, `model.mjs` avant `graph.mjs`.
+donc être concaténés AVANT lui. De même, `model.mjs` avant `graph.mjs`, et
+`workspace.mjs` après `registry`, `graph`, `explorer` et `model` — il les
+appelle tous pour analyser chaque projet.
 
 ## Le garde-fou
 

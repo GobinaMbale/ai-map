@@ -189,9 +189,35 @@ ai-map . -o docs/carte.html # sortie choisie
 | `-o fichier.html` | fichier de sortie (défaut `<projet>/ai-map.report.html`) |
 | `--open` | ouvrir le rapport dans le navigateur |
 | `--json` | écrire aussi le modèle brut en JSON (CI, outils tiers) |
+| `-w`, `--workspace` | vue portefeuille : tous les projets sous ce dossier |
+| `--depth n` | profondeur de recherche des projets (défaut : 3) |
 
 Le rapport est un **fichier HTML autoportant** : il s'ouvre hors ligne, se
 partage par mail ou se publie sur un intranet sans rien d'autre.
+
+### Plusieurs projets à la fois
+
+```bash
+ai-map ~/dev --workspace     # un rapport pour tous les projets sous ~/dev
+```
+
+Un rapport de portefeuille n'est pas un rapport plus gros : c'est un autre
+produit. Il ne cumule pas les entités — il montre **ce que seul ce niveau peut
+révéler** :
+
+| Vue | Ce qu'elle répond |
+|---|---|
+| **Portefeuille** | quel projet est le plus en retard ? Une fiche par projet, score de maturité, les moins matures en tête |
+| **Divergences** | la même skill existe dans trois projets — ont-elles encore le même contenu ? Qui applique la convention, qui ne l'applique pas ? |
+
+Cliquer une fiche ouvre le rapport complet du projet, à l'identique.
+
+AI-MAP compare uniquement ce qui est **censé rester aligné** — skills,
+commandes, agents, règles, prompts, workflows, déclarations MCP. Un `CLAUDE.md`
+par projet *doit* différer : le signaler serait un faux positif.
+
+Si le dossier racine ne porte lui-même aucune configuration IA, la vue
+portefeuille est choisie automatiquement.
 
 ### Depuis les sources
 
@@ -293,6 +319,7 @@ Ce qu'elle apporte :
 | Commande | Effet |
 |---|---|
 | **AI-MAP : Générer la carte** | rapport complet dans un onglet de l'éditeur |
+| **AI-MAP : Générer la carte du portefeuille** | un rapport pour tous les projets du dossier ouvert |
 | **AI-MAP : Ouvrir dans le navigateur** | plein écran, impression, partage du fichier |
 | **AI-MAP : Enregistrer le rapport HTML…** | choix de l'emplacement, pour diffusion |
 | **AI-MAP : Rafraîchir** | ré-analyse le workspace |

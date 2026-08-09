@@ -70,6 +70,7 @@ src/
 │   ├── registry.mjs        registre des plugins (detect + scan)
 │   ├── graph.mjs           graphe transverse, liens `cross`, liens code
 │   ├── explorer.mjs        arborescences des dossiers détectés
+│   ├── workspace.mjs       PORTEFEUILLE : découverte multi-projets, divergences
 │   └── reporting/
 │       ├── render.mjs      templating HTML + inline des assets
 │       └── assets/{styles.css, app.js}
@@ -88,6 +89,23 @@ core/reporting          →  HTML autoportant
 **Ajouter un écosystème** = un fichier dans `src/plugins/` + une ligne dans
 `registry.mjs` + une ligne dans `build.mjs`. Suivre la skill `add-adapter`.
 
+### Deux produits, un seul rendu
+
+`core/workspace.mjs` réutilise le pipeline mono-projet sur chaque projet trouvé,
+puis produit un modèle d'un **autre genre** : `{ workspace:true, projects[],
+models{}, divergences }`. Il n'a **pas** de `entities`, `graph` ni `sources`.
+
+Conséquences à respecter dans tout code qui lit un modèle :
+
+- `app.js` distingue `DATA` (charge utile) de `M` (**modèle courant** : le
+  workspace, ou le projet ouvert). Écrire `DATA.entities` dans le rendu d'un
+  projet est un bug — c'est `M`.
+- Tout accès à `M.graph.x` doit tolérer l'absence de graphe (`(M.graph||{}).x`).
+- `sidebar.js` bascule sur `workspaceHtml()` quand `model.workspace` : le garde-
+  fou `totals.entities` ne suffit pas, un workspace en a beaucoup.
+- Le niveau portefeuille ne montre **que ce qui n'a de sens qu'à ce niveau** :
+  rang des projets, artefacts partagés, divergences. Pas de cumul d'entités.
+
 ---
 
 ## Commandes
@@ -95,9 +113,10 @@ core/reporting          →  HTML autoportant
 | Script | Effet |
 |---|---|
 | `npm run build` | régénère `bin/ai-map.mjs` et le copie dans l'extension |
-| `npm test` | 120 vérifications (modèle, graphe, rapport, vues) |
+| `npm test` | modèle, graphe, rapport, vues VS Code, portefeuille |
 | `npm run shots` | **capture le rapport onglet par onglet** (vérif visuelle) |
 | `npm run shots:dark` | idem en thème sombre |
+| `npm run shots:ws` | capture la vue portefeuille (chaque famille de divergence) |
 | `npm run check` | build + tests + captures, dans l'ordre |
 | `npm run map` | cartographie CE dépôt (auto-application) |
 | `npm run demo` | ouvre le rapport de `examples/demo-project` |

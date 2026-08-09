@@ -38,8 +38,14 @@ Variantes :
 npm run shots -- ../qcm-factory      # sur un vrai projet, pas un exemple
 npm run shots:dark                   # thème sombre → .shots-dark/
 npm run shots -- . --width 1100      # largeur réduite (test responsive)
+npm run shots:ws                     # VUE PORTEFEUILLE → .shots-ws/
 npm run check                        # build + tests + captures d'un coup
 ```
+
+⚠ `npm run shots` capture les onglets du rapport **mono-projet**. Un rapport
+workspace a d'autres onglets : sans `shots:ws`, le script ne trouve rien et
+sort sans rien signaler. Toute modification de `app.js` doit passer par les
+deux.
 
 Le script pilote un **Chrome ou Edge déjà installé** (aucun navigateur n'est
 téléchargé) et échoue si la page émet la moindre erreur JS.
@@ -66,6 +72,18 @@ et la vue MCD.
 **Entités** — les fiches sont-elles de hauteur homogène ? Le pied (chemin +
 date) est-il aligné en bas ?
 
+**Portefeuille** *(workspace uniquement)* — les fiches ont-elles leur pied
+aligné en bas ? Deux projets homonymes sont-ils distinguables (chemin affiché) ?
+Les trois chiffres qui parlent d'écarts — sous-titre d'en-tête, badge de
+l'onglet, KPI — **disent-ils le même nombre** ? Ils ont déjà divergé : 23 à côté
+de « Divergences » pendant que l'en-tête annonçait 0.
+
+**Divergences** *(workspace uniquement)* — capturer les **trois** familles
+(`shots:ws` clique chaque pastille). La famille « copies alignées » doit être
+regroupée par ensemble de projets : une ligne par artefact redonnait un mur de
+23 lignes. Vérifier aussi le cas sans problème : le bandeau vert doit passer
+avant la liste.
+
 **Fiche détaillée** — c'est là que régresse le rendu Markdown. Vérifier :
 blocs de code avec leur **langue** et le bouton **Copier** ; listes numérotées
 qui ne repartent pas à 1 ; titres de section avec leur barre colorée ; cases à
@@ -83,6 +101,13 @@ npm run shots -- .                   # AI-MAP se cartographie lui-même
 
 Le graphe ne devient difficile qu'au-delà de ~60 nœuds — un exemple ne le
 révélera jamais.
+
+Pour le portefeuille, `examples/` (3 projets) suffit à valider la mise en forme
+mais **pas** la densité ni les vraies divergences :
+
+```bash
+npm run shots -- ../.. --workspace -o .shots-ws   # 6 projets réels
+```
 
 ## Après vérification
 

@@ -38,6 +38,74 @@ une composante pèse `1/N` du score, donc corriger `n` entités sur `u` rapporte
 dépasser 100. Le test compare la somme des gains à `100 − score`. Si un jour
 une recommandation est ajoutée sans respecter cette arithmétique, le test tombe.
 
+## La règle qui prime : ne reprocher qu'une promesse non tenue
+
+**AI-MAP signale une contradiction entre ce qu'un fichier annonce et ce qui
+existe. Jamais l'absence de quelque chose qu'il n'a jamais promis.**
+
+C'est la seule formulation qui tienne à l'échelle. Les usages légitimes d'un
+outil IA sont innombrables et personne ne peut les énumérer : trois faux
+positifs ont été trouvés en trois questions, tous produits par une règle
+générique appliquée là où elle ne valait pas.
+
+| Cas | Verdict générique (faux) | Verdict correct |
+|---|---|---|
+| Hook `Stop` dans `settings.json` | « rien ne le cite → à supprimer » | déclenché par un événement : **hors sujet** |
+| Skill pilotant Jira via MCP | « ne touche aucun code » | cible distante **vérifiable** dans `.mcp.json` |
+| Skill « traiter des images » | « ne touche aucun code » | n'annonce aucune cible : **hors périmètre** |
+| Skill citant `backend/x.py` inexistant | — | **vrai défaut** : promesse non tenue |
+
+### Ce que ça impose
+
+**Le silence est le défaut.** Une entité qui n'annonce rien n'entre pas dans le
+dénominateur. C'est ce qui rend la mesure sûre face aux cas jamais vus : nul
+besoin de les recenser, ils ne déclenchent rien.
+
+**Une règle qui ne peut pas nommer sa preuve ne doit pas exister.** Toute alerte
+produit trois choses, sinon elle n'est pas écrite :
+
+| Champ | Contenu |
+|---|---|
+| `facts` | ce qui a été **mesuré** (`0 relation dans le graphe`, `description absente`) |
+| `why` | la **règle d'activation** qui rend ce fait problématique |
+| `todo` | l'action concrète |
+
+Sans `facts`, le lecteur doit croire l'outil sur parole et ne peut pas le
+contester. C'est un test de `test/smoke.mjs`.
+
+**Un pourcentage s'affiche avec son dénominateur ET son hors-périmètre.**
+« Traçabilité 50 % » ne dit pas que la moitié des skills n'est pas concernée
+par la mesure ; `part.scope` le dit.
+
+**Avant d'ajouter une règle**, chercher l'usage légitime qu'elle condamnerait.
+S'il en existe un, la règle est trop large — restreindre au cas où une
+promesse écrite est démentie par le disque.
+
+## Les divergences entre projets
+
+Signaler une divergence, c'est accuser quelqu'un d'avoir laissé dériver un
+fichier. Un faux positif ici coûte plus cher qu'un silence : on cesse de lire
+l'onglet.
+
+**Ne comparer que ce qu'on copie délibérément d'un projet à l'autre.**
+`WS_COMPARABLE` (`core/workspace.mjs`) limite la comparaison aux skills,
+commandes, agents, règles, prompts, workflows et déclarations MCP. Un `CLAUDE.md`
+par projet **doit** différer — c'est de la mémoire locale, pas une copie qui a
+dérivé. Deux tâches « 3. Tests » dans deux projets sont une collision de titre.
+Ce piège est verrouillé par `test/workspace.mjs`.
+
+**Figer l'empreinte avant toute transformation.** Le contenu est tronqué en
+aperçu au niveau portefeuille, et la note ajoutée contient le chemin du projet :
+comparer après coup rendait 21 copies identiques artificiellement divergentes.
+`e.print` est calculé en premier, dans `wsTrim`.
+
+**Compter les projets, pas les occurrences.** Un même projet peut porter deux
+entités homonymes ; « 2/6 projets » doit rester vrai.
+
+Les trois chiffres qui parlent d'écarts — sous-titre, badge d'onglet, KPI —
+dérivent tous de `totals.misaligned`. Ils ont déjà divergé une fois : l'un
+comptait les artefacts partagés, l'autre les seules divergences strictes.
+
 ## Ce qui est interdit
 
 - Une **tendance** (« +3 ce mois-ci ») tant qu'aucun historique n'est persisté.

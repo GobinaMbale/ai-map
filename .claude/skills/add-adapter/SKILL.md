@@ -40,6 +40,18 @@ s'active que si un artefact Copilot est réellement présent.
 Oublier le point 4 donne un bundle qui plante ; oublier le 2 donne un
 écosystème sans nom ni couleur.
 
+**Effet sur le portefeuille.** `core/workspace.mjs` décide qu'un dossier est un
+projet en appelant `plugin.detect()` de chaque adaptateur. Un `detect()` trop
+large — qui répond vrai sur un dossier quelconque — fait apparaître des projets
+fantômes dans la vue portefeuille, bien au-delà du rapport de l'adaptateur.
+Vérifier avec `npm run shots:ws`.
+
+Si l'adaptateur produit des entités **censées être copiées d'un projet à
+l'autre** (skills, commandes, règles…), leur `kind` doit figurer dans
+`WS_COMPARABLE` ; sinon leurs divergences resteront invisibles. À l'inverse,
+n'y ajoutez jamais un type propre au projet : ce serait un faux positif
+permanent (voir `.claude/rules/honest-data.md`).
+
 ## Écrire le scan
 
 Utiliser les helpers existants plutôt que de reparser :

@@ -78,9 +78,23 @@ Le **graphe transverse**, avec ses filtres par type et par relation :
 | Commande | Effet |
 |---|---|
 | **AI-MAP : Générer la carte** | rapport complet dans un onglet |
+| **AI-MAP : Générer la carte du portefeuille** | un rapport pour tous les projets du dossier ouvert |
 | **AI-MAP : Ouvrir la carte dans le navigateur** | plein écran, impression, partage |
 | **AI-MAP : Enregistrer le rapport HTML…** | choisir où déposer le fichier |
 | **AI-MAP : Rafraîchir** | ré-analyser le workspace |
+
+### Plusieurs projets dans un même dossier
+
+Un dossier de travail qui regroupe plusieurs dépôts produit une **vue
+portefeuille** : une fiche par projet classée du moins mature au plus mature, et
+un onglet *Divergences* qui répond à la question que personne ne peut se poser
+projet par projet — *la même skill existe dans trois projets, ont-elles encore
+le même contenu ?*
+
+Cliquer une fiche ouvre le rapport complet de ce projet. Seuls les objets
+**censés rester alignés** sont comparés (skills, commandes, agents, règles,
+workflows, MCP) : un `CLAUDE.md` par projet doit différer, le signaler serait un
+faux positif.
 
 ## Utilisation
 
