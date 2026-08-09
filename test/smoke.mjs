@@ -284,6 +284,31 @@ for (const t of run.tabs) {
   }
 }
 
+// ----- Plein écran du graphe quand l'API est REFUSÉE -----------------------
+// Cas d'une webview VS Code : requestFullscreen() rejette, on bascule sur un
+// repli CSS. Le bouton doit alors savoir SORTIR de ce repli — il retentait
+// requestFullscreen(), qui rejetait, et « Quitter » remettait le plein écran.
+{
+  const gr = findAll(run.root, (n) => n.tagName === 'BUTTON' && /Graphe/.test(textOf(n)))[0];
+  if (gr) {
+    gr.onclick();
+    const fsBtn = findAll(run.root,
+      (n) => n.tagName === 'BUTTON' && /Plein écran/.test(textOf(n)))[0];
+    check('le bouton plein écran existe', !!fsBtn);
+    if (fsBtn) {
+      // Le repli passe par le `catch` d'une promesse : il faut laisser tourner
+      // la microtâche avant de juger l'état du bouton.
+      const tick = () => new Promise((r) => setTimeout(r, 0));
+      fsBtn.onclick(); await tick();
+      check('un premier clic passe en plein écran (repli)',
+        /Quitter/.test(textOf(fsBtn)), textOf(fsBtn));
+      fsBtn.onclick(); await tick();
+      check('un second clic en SORT',
+        /Plein écran/.test(textOf(fsBtn)) && !/Quitter/.test(textOf(fsBtn)), textOf(fsBtn));
+    }
+  }
+}
+
 // ----- Graphe : contrôles en barre latérale --------------------------------
 {
   const gr = findAll(run.root, (n) => n.tagName === 'BUTTON' && /Graphe/.test(textOf(n)))[0];
@@ -374,7 +399,9 @@ function runReportInFakeDom(model) {
       get innerHTML() { return this._html || ''; },
       clientWidth: 900, clientHeight: 500, width: 900, height: 500,
       offsetWidth: 120, offsetHeight: 40,
-      classList: { add: noop, remove: noop, toggle: () => false, contains: () => false },
+      // classList RÉEL, adossé à className : bouchonné, il rendait
+      // intestable tout code qui lit l'état d'une classe — comme le bouton
+      // plein écran, qui décide en fonction de `contains('fullscreen')`.
       appendChild(c) { this.children.push(c); return c; },
       removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; },
       remove() {}, insertBefore(c) { this.children.push(c); return c; },
@@ -385,7 +412,26 @@ function runReportInFakeDom(model) {
       getContext: () => ctx2d,
       querySelector: () => null, querySelectorAll: () => [],
       get parentNode() { return null; },
+      // Condition exacte d'une webview VS Code : la méthode EXISTE mais son
+      // appel est refusé (iframe sans autorisation). Ne pas la définir du tout
+      // testerait un cas qui n'arrive dans aucun navigateur moderne.
+      requestFullscreen: () => Promise.reject(new Error('fullscreen refusé')),
     };
+    el.classList = {
+      _list() { return String(el.className || '').split(/\s+/).filter(Boolean); },
+      contains(c) { return this._list().includes(c); },
+      add(c) {
+        const l = this._list();
+        if (!l.includes(c)) { l.push(c); el.className = l.join(' '); }
+      },
+      remove(c) { el.className = this._list().filter((x) => x !== c).join(' '); },
+      toggle(c, force) {
+        const want = force === undefined ? !this.contains(c) : !!force;
+        if (want) this.add(c); else this.remove(c);
+        return want;
+      },
+    };
+
     // `id` doit être un accesseur pour alimenter getElementById : sans ça,
     // document.getElementById renvoyait null et le rapport sortait de son rendu
     // sans rien construire — les tests passaient à vide.

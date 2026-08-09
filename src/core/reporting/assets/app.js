@@ -1336,7 +1336,9 @@
 
   // Échap ferme la fiche, comme le faisait la modale.
   document.addEventListener('keydown', function(ev){
-    if(ev.key==='Escape' && state.detail && !document.fullscreenElement) closeDetail();
+    if(ev.key!=='Escape' || document.fullscreenElement) return;
+    if(graphExitFs && graphExitFs()) return;
+    if(state.detail) closeDetail();
   });
 
   // ------------------------------------------------------------- arborescences --
@@ -1511,6 +1513,7 @@
   var gState = { view:'network', colorBy:'kind', show:{}, showGeneric:false, showOrphans:false, kinds:{} };
   (function(){ (DATA.graph.edgeTypes||[]).forEach(function(t){ gState.show[t.type]=true; }); })();
   var graphApi = null;
+  var graphExitFs = null;
 
   // Sous-graphe réellement dessiné, après application des filtres.
   function visibleGraph(){
@@ -1691,16 +1694,33 @@
       });
     }
     fsBtn.onclick=function(){
+      // Déjà en plein écran RÉEL : c'est le navigateur qui en sort.
       if(document.fullscreenElement){ document.exitFullscreen(); return; }
+
+      // Déjà en REPLI CSS : il faut en sortir ICI. Sans ce test on retentait
+      // requestFullscreen(), qui échoue de nouveau dans une webview VS Code
+      // (iframe sans autorisation) et dont le catch rappelait applyFs(true) :
+      // « Quitter » remettait le plein écran au lieu de l'enlever. Le
+      // navigateur, lui, accordait le vrai plein écran et ne voyait pas le bug.
+      if(panel.classList.contains('fullscreen')){ applyFs(false); return; }
+
       if(panel.requestFullscreen){
         panel.requestFullscreen().catch(function(){ applyFs(true); });
       } else {
-        applyFs(!panel.classList.contains('fullscreen'));
+        applyFs(true);
       }
     };
     panel.addEventListener('fullscreenchange', function(){
       applyFs(document.fullscreenElement === panel);
     });
+    // Échap doit aussi sortir du repli : en plein écran réel le navigateur s'en
+    // charge, mais le repli CSS n'a personne pour l'écouter.
+    graphExitFs = function(){
+      if(panel.classList.contains('fullscreen') && !document.fullscreenElement){
+        applyFs(false); return true;
+      }
+      return false;
+    };
     gt.appendChild(fsBtn);
     return gt;
   }
